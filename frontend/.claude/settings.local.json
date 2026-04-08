@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:/vkr_phenotyping/src_frontend && npm install tailwindcss @tailwindcss/vite 2>&1)",
+      "Bash(cd D:/vkr_phenotyping/src_frontend && npm install chart.js 2>&1)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "WebFetch(domain:app.roboflow.com)",
+      "WebSearch",
+      "WebFetch(domain:blog.roboflow.com)",
+      "Bash(cd /d/vkr_phenotyping/src_frontend && node screenshot.mjs 2>&1)",
+      "Bash(ls:*)"
+    ]
+  }
+}

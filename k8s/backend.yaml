@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phenoplant-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: phenoplant-backend
+  template:
+    metadata:
+      labels:
+        app: phenoplant-backend
+    spec:
+      containers:
+      - name: backend
+        image: phenoplant-backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MONGO_URL
+          value: "mongodb://mongodb:27017"
+        - name: DB_NAME
+          value: phenoplant
+        - name: JWT_SECRET
+          value: "phenoplant-k8s-secret-2025"
+        - name: KEYCLOAK_URL
+          value: "http://keycloak-svc:8080"
+        - name: KEYCLOAK_REALM
+          value: "phenoplant"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "phenoplant-app"
+        - name: KEYCLOAK_ADMIN_USER
+          value: "admin"
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          value: "admin"
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 300m
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phenoplant-backend
+spec:
+  selector:
+    app: phenoplant-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
