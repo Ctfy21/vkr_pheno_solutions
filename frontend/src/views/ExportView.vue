@@ -28,6 +28,7 @@ const dateTo = ref('')
 const exporting = ref(false)
 const exported = ref(false)
 const exportError = ref('')
+const statusLabel: Record<string, string> = { active: 'Активен', completed: 'Завершен', draft: 'Черновик', archived: 'Архив' }
 
 onMounted(async () => {
   try {
@@ -93,7 +94,7 @@ async function doExport() {
               <div :class="['w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0', selectedStudies.includes(study.id) ? 'border-(--color-accent-green) bg-(--color-accent-green)' : 'border-(--color-text-muted)']">
                 <svg v-if="selectedStudies.includes(study.id)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" class="text-(--color-text-inverse)" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>
               </div>
-              <div><p class="text-sm text-(--color-text-primary)">{{ study.name }}</p><p class="text-xs text-(--color-text-muted)">{{ study.plant_count || study.plantCount || 0 }} растений &middot; {{ study.status }}</p></div>
+              <div><p class="text-sm text-(--color-text-primary)">{{ study.name }}</p><p class="text-xs text-(--color-text-muted)">{{ study.plant_count || study.plantCount || 0 }} растений &middot; {{ statusLabel[study.status] || study.status }}</p></div>
             </button>
           </div>
         </div>
