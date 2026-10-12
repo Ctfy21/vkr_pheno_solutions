@@ -140,10 +140,12 @@ def measure_plant_height(image_bytes: bytes, scale_px_per_cm: float = 0.0) -> di
     height_cm = max(0.0, min(height_cm, 100.0))  # cap at 100cm (ruler length)
 
     green_area = int(cv2.countNonZero(mask))
+    leaf_area_cm2 = round(green_area / (px_per_cm ** 2), 2) if px_per_cm > 0 else 0.0
 
     return {
         "height_px": int(height_px),
         "height_cm": height_cm,
+        "leaf_area_cm2": leaf_area_cm2,
         "top_y": int(top_y),
         "bottom_y": int(bot_y),
         "image_height": int(h_img),

@@ -8,6 +8,7 @@ from jose.utils import base64url_decode
 from app.config import KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 _jwks_cache: dict = {}
 
@@ -78,15 +79,10 @@ def extract_roles(payload: dict) -> List[str]:
     return realm_access.get("roles", [])
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
-    """Get current user from Keycloak JWT."""
-    payload = await decode_keycloak_token(credentials.credentials)
+def _user_from_payload(payload: dict) -> dict:
     roles = extract_roles(payload)
-
     # Map to user object compatible with existing code
-    user = {
+    return {
         "_id": payload.get("sub", ""),
         "email": payload.get("email", ""),
         "name": payload.get("preferred_username", payload.get("name", "")),
@@ -94,7 +90,24 @@ async def get_current_user(
         "roles": roles,
         "organizationId": "",
     }
-    return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    """Get current user from Keycloak JWT."""
+    payload = await decode_keycloak_token(credentials.credentials)
+    return _user_from_payload(payload)
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+) -> Optional[dict]:
+    """Same as get_current_user, but returns None when no token is sent (signed links)."""
+    if credentials is None:
+        return None
+    payload = await decode_keycloak_token(credentials.credentials)
+    return _user_from_payload(payload)
 
 
 def require_role(required_role: str):
@@ -102,5 +115,14 @@ def require_role(required_role: str):
     async def _check(user: dict = Depends(get_current_user)):
         if required_role not in user.get("roles", []):
             raise HTTPException(status_code=403, detail=f"Role '{required_role}' required")
+        return user
+    return _check
+
+
+def require_any_role(*roles: str):
+    """Dependency factory: require at least one of the given roles."""
+    async def _check(user: dict = Depends(get_current_user)):
+        if not set(roles) & set(user.get("roles", [])):
+            raise HTTPException(status_code=403, detail="Insufficient role")
         return user
     return _check
