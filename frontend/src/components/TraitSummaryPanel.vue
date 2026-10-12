@@ -141,11 +141,29 @@ onBeforeUnmount(() => charts.splice(0).forEach(c => c.destroy()))
                 </tr>
               </tbody>
             </table>
+            <p v-if="trait.comparisons.length" class="text-[10px] uppercase tracking-wider text-(--color-text-muted)">Сравнение с контролем, все даты</p>
             <div v-for="c in trait.comparisons" :key="c.group"
               :class="['px-3 py-2 rounded-lg text-xs border', c.significant ? 'border-(--color-accent-green)/20 bg-(--color-accent-green)/5' : 'border-(--color-border-subtle) bg-(--color-bg-base)']">
               <span class="text-(--color-text-primary)">{{ c.group }}</span>
               <span class="text-(--color-text-muted)"> vs {{ c.reference }}: Δ = {{ fmt(c.meanDiff) }} {{ trait.unit }}, t = {{ fmt(c.t) }}, df = {{ fmt(c.df, 1) }}, p {{ fmtP(c.pValue).startsWith('<') ? '' : '=' }} {{ fmtP(c.pValue) }}</span>
               <span :class="c.significant ? 'text-(--color-accent-green)' : 'text-(--color-text-muted)'"> — {{ c.significant ? 'различие значимо' : 'различие не значимо' }}</span>
+            </div>
+            <div v-if="trait.comparisonsByDate?.length" class="text-xs">
+              <p class="text-[10px] uppercase tracking-wider text-(--color-text-muted) mb-1">По датам съёмки</p>
+              <table class="w-full">
+                <thead><tr class="text-[10px] uppercase text-(--color-text-muted)">
+                  <th class="py-1 text-left">Дата</th><th class="py-1 text-left">Группа</th>
+                  <th class="py-1 text-right">Δ, {{ trait.unit }}</th><th class="py-1 text-right">p</th>
+                </tr></thead>
+                <tbody class="divide-y divide-(--color-border-subtle)">
+                  <tr v-for="c in trait.comparisonsByDate" :key="c.date + c.group">
+                    <td class="py-1 font-mono text-(--color-text-secondary)">{{ c.date }}</td>
+                    <td class="py-1 text-(--color-text-muted)">{{ c.group }}</td>
+                    <td class="py-1 text-right font-mono">{{ fmt(c.meanDiff) }}</td>
+                    <td :class="['py-1 text-right font-mono', c.significant ? 'text-(--color-accent-green)' : 'text-(--color-text-muted)']">{{ fmtP(c.pValue) }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <details v-if="trait.growth.length" class="text-xs">
               <summary class="cursor-pointer text-(--color-accent-green)">Скорость роста по растениям ({{ trait.growth.length }})</summary>

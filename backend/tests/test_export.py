@@ -116,6 +116,7 @@ class TestEndpoints:
         assert "Соя, засуха" in text
         assert "Примеры аннотированных изображений" in text
         assert "Сравнение групп" in text
+        assert "внутри каждой даты" in " ".join(text.split())
 
         bad = await client.get(f"/api/studies/{study['id']}/export?format=docx", headers=auth_headers)
         assert bad.status_code == 422

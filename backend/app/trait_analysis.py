@@ -280,6 +280,7 @@ def summarize(records: List[dict]) -> dict:
                 group_dates[rec["treatment"]][rec["date"]].append(rec["value"])
 
         comparisons = []
+        comparisons_by_date = []
         if len(groups) >= 2:
             ref = _reference_group(list(groups))
             for g in sorted(groups):
@@ -288,12 +289,21 @@ def summarize(records: List[dict]) -> dict:
                 test = welch_test(groups[g], groups[ref])
                 if test:
                     comparisons.append({"group": g, "reference": ref, **test})
+            # Same comparison within each capture date: plants of the same age
+            for day in sorted(dates):
+                for g in sorted(groups):
+                    if g == ref:
+                        continue
+                    test = welch_test(group_dates.get(g, {}).get(day, []), group_dates.get(ref, {}).get(day, []))
+                    if test:
+                        comparisons_by_date.append({"date": day, "group": g, "reference": ref, **test})
 
         traits_out.append({
             "key": trait["key"], "name": trait["name"], "unit": trait["unit"], "coTermId": trait["coTermId"],
             "overall": describe(r["value"] for r in recs),
             "byTreatment": [{"treatment": g, **describe(v)} for g, v in sorted(groups.items())],
             "comparisons": comparisons,
+            "comparisonsByDate": comparisons_by_date,
             "dynamics": [{"date": d, **describe(v)} for d, v in sorted(dates.items())],
             "dynamicsByTreatment": [
                 {"treatment": g, "points": [{"date": d, **describe(v)} for d, v in sorted(by_date.items())]}

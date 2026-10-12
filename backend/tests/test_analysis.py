@@ -97,6 +97,9 @@ class TestPipeline:
         groups = {g["treatment"]: g for g in height["byTreatment"]}
         assert groups["Контроль"]["mean"] > groups["Засуха"]["mean"]
         assert height["comparisons"][0]["reference"] == "Контроль"
+        by_date = height["comparisonsByDate"]
+        assert [c["date"] for c in by_date] == ["2026-03-01", "2026-03-08"]
+        assert all(c["group"] == "Засуха" and c["meanDiff"] < 0 for c in by_date)
         growth = {g["plant"]: g for g in height["growth"]}
         assert growth["P1"]["days"] == 7
         assert growth["P1"]["agr"] == pytest.approx((22.0 - 15.0) / 7, abs=0.05)

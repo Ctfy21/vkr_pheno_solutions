@@ -290,6 +290,19 @@ def build_xlsx(ds: ExportDataset) -> bytes:
     else:
         st.append(["Недостаточно данных: нужны минимум две группы обработки по 2 и более растения."])
 
+    by_date = [(t, c) for t in ds.summary["traits"] for c in t.get("comparisonsByDate", [])]
+    if by_date:
+        st.append([])
+        st.append(["Сравнение с контролем внутри каждой даты съёмки (t-критерий Уэлча, α = 0,05)"])
+        st.cell(row=st.max_row, column=1).font = title_font
+        bd_headers = ["Признак", "Дата съёмки", "Группа", "Контроль", "Разность средних", "t", "df", "p", "Различие значимо"]
+        st.append(bd_headers)
+        style_header(st, st.max_row, len(bd_headers))
+        for t, c in by_date:
+            st.append([t["name"], c["date"], c["group"], c["reference"], c["meanDiff"], c["t"], c["df"], c["pValue"],
+                       "да" if c["significant"] else "нет"])
+            p_format(st, 8)
+
     corr = ds.summary.get("correlation")
     st.append([])
     st.append(["Корреляция высоты растения и площади проекции листьев (Пирсон)"])
@@ -515,7 +528,18 @@ def build_pdf(ds: ExportDataset) -> bytes:
         for t, c in comparisons:
             cmp_rows.append([t["name"], c["group"], c["reference"], _fmt(c["meanDiff"]), _fmt(c["t"]), _fmt(c["df"], 1),
                              _fmt_p(c["pValue"]), "да" if c["significant"] else "нет"])
-        story.append(table(cmp_rows, [38 * mm, 25 * mm, 25 * mm, 22 * mm, 14 * mm, 13 * mm, 16 * mm, width - 153 * mm]))
+        story.append(table(cmp_rows, [35 * mm, 25 * mm, 25 * mm, 22 * mm, 14 * mm, 13 * mm, 19 * mm, width - 153 * mm]))
+    by_date = [(t, c) for t in ds.summary["traits"] for c in t.get("comparisonsByDate", [])]
+    if by_date:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Сравнение выше выполнено по всем датам съёмки вместе. Ниже то же сравнение внутри каждой даты, "
+                               "для растений одного возраста.", s_p))
+        story.append(Spacer(1, 4))
+        rows = [["Признак", "Дата съёмки", "Группа", "Разность средних", "t", "df", "p", "Значимо"]]
+        for t, c in by_date:
+            rows.append([t["name"], c["date"], c["group"], _fmt(c["meanDiff"]), _fmt(c["t"]), _fmt(c["df"], 1),
+                         _fmt_p(c["pValue"]), "да" if c["significant"] else "нет"])
+        story.append(table(rows, [35 * mm, 22 * mm, 28 * mm, 22 * mm, 14 * mm, 13 * mm, 19 * mm, width - 153 * mm]))
 
     # 3. Charts
     def line_chart(trait) -> Drawing:
