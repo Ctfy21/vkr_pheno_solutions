@@ -9,19 +9,22 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { useSignedImages } from '@/composables/useSignedImages'
+import TraitSummaryPanel from '@/components/TraitSummaryPanel.vue'
 import { Chart, registerables } from 'chart.js'
 
 Chart.register(...registerables)
 
 const route = useRoute()
 const api = useApi()
+const signed = useSignedImages()
 const studyId = computed(() => route.params.studyId as string)
 
 const study = ref<any>(null)
 const plants = ref<any[]>([])
 const analysisRuns = ref<any[]>([])
 const loading = ref(true)
-const activeTab = ref<'runs' | 'images' | 'charts' | 'table'>('runs')
+const activeTab = ref<'runs' | 'images' | 'charts' | 'stats' | 'table'>('runs')
 
 // Runs tab
 const expandedRunId = ref<string | null>(null)
@@ -130,7 +133,7 @@ function toggleRun(id: string) {
 }
 
 function imageUrl(imageId: string) {
-  return imageId ? `/api/images/file/${imageId}` : ''
+  return signed.imageUrl(imageId)
 }
 
 function openLightbox(img: any) {
@@ -141,24 +144,18 @@ function closeLightbox() {
   lightboxImage.value = null
 }
 
-async function downloadCsv() {
+const exporting = ref<string | null>(null)
+
+async function downloadExport(kind: 'xlsx' | 'pdf' | 'csv') {
+  exporting.value = kind
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/studies/${studyId.value}/export-results-csv`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!res.ok) throw new Error('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `results_${studyId.value}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    await api.download(`/studies/${studyId.value}/export?format=${kind}`, `results_${studyId.value}.${kind}`)
   } catch (e: any) {
     alert('Ошибка экспорта: ' + (e.message || 'unknown'))
   }
+  exporting.value = null
 }
+const downloadCsv = () => downloadExport('csv')
 
 function buildChart() {
   if (!chartCanvas.value) return
@@ -203,15 +200,18 @@ watch(activeTab, (t) => { if (t === 'charts') nextTick(() => setTimeout(buildCha
         <h1 class="font-(family-name:--font-display) text-3xl text-(--color-text-primary) mt-2">Результаты</h1>
         <p class="text-sm text-(--color-text-secondary) mt-1">{{ analysisRuns.length }} запусков анализа · {{ totalImages }} изображений · {{ totalMeasurements }} измерений</p>
       </div>
-      <button @click="downloadCsv" class="px-4 py-2.5 bg-gradient-to-r from-(--color-accent-green) to-(--color-accent-green-dim) text-(--color-text-inverse) rounded-lg text-sm font-semibold hover:opacity-90 transition-all flex items-center gap-2">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Экспорт CSV
-      </button>
+      <div class="flex gap-2">
+        <button v-for="fmt in (['xlsx', 'pdf', 'csv'] as const)" :key="fmt" @click="downloadExport(fmt)" :disabled="exporting !== null"
+          class="px-4 py-2.5 bg-gradient-to-r from-(--color-accent-green) to-(--color-accent-green-dim) text-(--color-text-inverse) rounded-lg text-sm font-semibold hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          {{ exporting === fmt ? 'Формирование...' : fmt.toUpperCase() }}
+        </button>
+      </div>
     </div>
 
     <!-- Tabs -->
     <div class="flex gap-0 border-b border-(--color-border-subtle)">
-      <button v-for="tab in [{id:'runs',l:'Анализы'},{id:'images',l:'Изображения'},{id:'charts',l:'Графики'},{id:'table',l:'Таблица'}]" :key="tab.id" @click="activeTab = tab.id as any"
+      <button v-for="tab in [{id:'runs',l:'Анализы'},{id:'images',l:'Изображения'},{id:'charts',l:'Графики'},{id:'stats',l:'Статистика'},{id:'table',l:'Таблица'}]" :key="tab.id" @click="activeTab = tab.id as any"
         :class="['px-4 py-3 text-sm transition-colors relative', activeTab === tab.id ? 'text-(--color-accent-green)' : 'text-(--color-text-muted) hover:text-(--color-text-secondary)']">
         {{ tab.l }}<span v-if="activeTab === tab.id" class="absolute bottom-0 left-0 right-0 h-px bg-(--color-accent-green)"></span>
       </button>
@@ -370,6 +370,8 @@ watch(activeTab, (t) => { if (t === 'charts') nextTick(() => setTimeout(buildCha
         </div>
       </template>
     </div>
+
+    <TraitSummaryPanel v-if="activeTab === 'stats'" :study-id="studyId" />
 
     <!-- ═══ TAB 4: Full Data Table ═══ -->
     <div v-if="activeTab === 'table'">

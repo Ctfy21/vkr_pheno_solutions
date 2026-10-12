@@ -1,10 +1,10 @@
 <!--
   Design approach: GUIDED (2-column: settings left, summary right)
   Left: format selector, experiments, variables, dates. Right: sticky summary + download.
-  Real API call: POST /api/export
+  Real API call: POST /api/export (XLSX, PDF, CSV, BrAPI-style JSON)
 -->
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
 
 const api = useApi()
@@ -12,13 +12,22 @@ const studies = ref<any[]>([])
 const variables = ref<any[]>([])
 const loading = ref(true)
 
-const format = ref<'json' | 'csv'>('json')
+type Format = 'xlsx' | 'pdf' | 'csv' | 'json'
+const formats: { id: Format; title: string; hint: string; tags: string[] }[] = [
+  { id: 'xlsx', title: 'Excel (XLSX)', hint: 'Результаты, статистика, динамика, графики', tags: ['Excel', 'LibreOffice', 'R', 'Python'] },
+  { id: 'pdf', title: 'PDF-отчёт', hint: 'Сводка, графики, аннотированные снимки', tags: ['Печать', 'Отчётность'] },
+  { id: 'csv', title: 'CSV', hint: 'Плоская таблица для R, Python, Excel', tags: ['R', 'Python', 'SPSS'] },
+  { id: 'json', title: 'BrAPI JSON', hint: 'Наблюдения с CropOntology ID', tags: ['BreedBase', 'BMS', 'MIAPPE'] },
+]
+const format = ref<Format>('xlsx')
+const formatInfo = computed(() => formats.find(f => f.id === format.value)!)
 const selectedStudies = ref<string[]>([])
 const selectedVariables = ref<string[]>([])
-const dateFrom = ref('2025-01-01')
-const dateTo = ref('2025-12-31')
+const dateFrom = ref('')
+const dateTo = ref('')
 const exporting = ref(false)
 const exported = ref(false)
+const exportError = ref('')
 
 onMounted(async () => {
   try {
@@ -37,19 +46,23 @@ function toggleVariable(id: string) { const i = selectedVariables.value.indexOf(
 
 async function doExport() {
   exporting.value = true
+  exportError.value = ''
   try {
-    const blob = await fetch('/api/export', {
+    await api.download('/export', `phenotyping_export.${format.value}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${api.getToken()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format: format.value, study_ids: selectedStudies.value, variable_ids: selectedVariables.value.length ? selectedVariables.value : undefined, date_from: dateFrom.value, date_to: dateTo.value }),
-    }).then(r => r.blob()).catch(() => null)
-    if (blob) {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `phenotyping_export.${format.value === 'json' ? 'json' : 'csv'}`; a.click()
-      URL.revokeObjectURL(url)
-    }
-    exported.value = true; setTimeout(() => (exported.value = false), 4000)
-  } catch {}
+      body: {
+        format: format.value,
+        study_ids: selectedStudies.value,
+        variable_ids: selectedVariables.value,
+        date_from: dateFrom.value,
+        date_to: dateTo.value,
+      },
+    })
+    exported.value = true
+    setTimeout(() => (exported.value = false), 4000)
+  } catch (e: any) {
+    exportError.value = e.message || 'Ошибка экспорта'
+  }
   exporting.value = false
 }
 </script>
@@ -58,7 +71,7 @@ async function doExport() {
   <div class="space-y-6 fade-in">
     <div>
       <h1 class="font-(family-name:--font-display) text-3xl text-(--color-text-primary)">Экспорт данных</h1>
-      <p class="text-sm text-(--color-text-secondary) mt-1">Выгрузка фенотипических наблюдений в BrAPI JSON или CSV</p>
+      <p class="text-sm text-(--color-text-secondary) mt-1">Выгрузка результатов фенотипирования в XLSX, PDF, CSV или BrAPI JSON</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -66,13 +79,9 @@ async function doExport() {
         <div class="bg-(--color-bg-surface) border border-(--color-border-subtle) rounded-xl p-5">
           <h3 class="font-(family-name:--font-display) text-lg text-(--color-text-primary) mb-4">Формат</h3>
           <div class="grid grid-cols-2 gap-3">
-            <button @click="format = 'json'" :class="['p-4 rounded-lg border text-left transition-all', format === 'json' ? 'bg-(--color-accent-green)/5 border-(--color-accent-green)/30' : 'bg-(--color-bg-base) border-(--color-border-subtle) hover:border-(--color-border-default)']">
-              <div class="flex items-center gap-2 mb-2"><div :class="['w-3 h-3 rounded-full border-2', format === 'json' ? 'border-(--color-accent-green) bg-(--color-accent-green)' : 'border-(--color-text-muted)']"></div><span class="text-sm font-semibold text-(--color-text-primary)">BrAPI JSON</span></div>
-              <p class="text-xs text-(--color-text-muted)">Спецификация BrAPI v2.1</p>
-            </button>
-            <button @click="format = 'csv'" :class="['p-4 rounded-lg border text-left transition-all', format === 'csv' ? 'bg-(--color-accent-green)/5 border-(--color-accent-green)/30' : 'bg-(--color-bg-base) border-(--color-border-subtle) hover:border-(--color-border-default)']">
-              <div class="flex items-center gap-2 mb-2"><div :class="['w-3 h-3 rounded-full border-2', format === 'csv' ? 'border-(--color-accent-green) bg-(--color-accent-green)' : 'border-(--color-text-muted)']"></div><span class="text-sm font-semibold text-(--color-text-primary)">CSV</span></div>
-              <p class="text-xs text-(--color-text-muted)">Таблица для R, Python, Excel</p>
+            <button v-for="f in formats" :key="f.id" @click="format = f.id" :class="['p-4 rounded-lg border text-left transition-all', format === f.id ? 'bg-(--color-accent-green)/5 border-(--color-accent-green)/30' : 'bg-(--color-bg-base) border-(--color-border-subtle) hover:border-(--color-border-default)']">
+              <div class="flex items-center gap-2 mb-2"><div :class="['w-3 h-3 rounded-full border-2', format === f.id ? 'border-(--color-accent-green) bg-(--color-accent-green)' : 'border-(--color-text-muted)']"></div><span class="text-sm font-semibold text-(--color-text-primary)">{{ f.title }}</span></div>
+              <p class="text-xs text-(--color-text-muted)">{{ f.hint }}</p>
             </button>
           </div>
         </div>
@@ -109,10 +118,10 @@ async function doExport() {
         <div class="bg-(--color-bg-surface) border border-(--color-border-subtle) rounded-xl p-5 sticky top-20">
           <h3 class="font-(family-name:--font-display) text-lg text-(--color-text-primary) mb-4">Сводка экспорта</h3>
           <div class="space-y-3">
-            <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Формат</span><span class="text-(--color-text-primary) font-medium">{{ format === 'json' ? 'BrAPI JSON' : 'CSV' }}</span></div>
+            <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Формат</span><span class="text-(--color-text-primary) font-medium">{{ formatInfo.title }}</span></div>
             <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Эксперименты</span><span class="text-(--color-text-primary) font-medium">{{ selectedStudies.length }}</span></div>
             <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Переменные</span><span class="text-(--color-text-primary) font-medium">{{ selectedVariables.length === 0 ? 'Все' : selectedVariables.length }}</span></div>
-            <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Период</span><span class="text-(--color-text-primary) font-medium text-xs">{{ dateFrom }} — {{ dateTo }}</span></div>
+            <div class="flex items-center justify-between text-sm"><span class="text-(--color-text-muted)">Период</span><span class="text-(--color-text-primary) font-medium text-xs">{{ dateFrom || dateTo ? `${dateFrom || '…'} — ${dateTo || '…'}` : 'Весь период' }}</span></div>
           </div>
           <div class="glow-line my-5"></div>
           <button @click="doExport" :disabled="selectedStudies.length === 0 || exporting" class="w-full py-3 bg-gradient-to-r from-(--color-accent-green) to-(--color-accent-green-dim) text-(--color-text-inverse) rounded-lg text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -120,11 +129,12 @@ async function doExport() {
             <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             {{ exporting ? 'Формирование...' : 'Скачать файл' }}
           </button>
+          <p v-if="exportError" class="mt-4 p-3 bg-(--color-accent-rose)/10 border border-(--color-accent-rose)/20 rounded-lg text-xs text-(--color-accent-rose)">{{ exportError }}</p>
           <transition name="modal"><div v-if="exported" class="mt-4 p-3 bg-(--color-accent-green)/10 border border-(--color-accent-green)/20 rounded-lg text-center"><p class="text-xs text-(--color-accent-green) font-medium">Файл сформирован!</p></div></transition>
           <div class="mt-5 p-3 bg-(--color-bg-base) rounded-lg">
             <p class="text-[10px] uppercase tracking-wider text-(--color-text-muted) mb-1">Совместимость</p>
             <div class="flex flex-wrap gap-1.5 mt-2">
-              <span v-for="tag in format === 'json' ? ['BreedBase', 'BMS', 'MIAPPE', 'ISA-Tab'] : ['R', 'Python', 'Excel', 'SPSS']" :key="tag" class="px-2 py-0.5 rounded text-[10px] bg-(--color-bg-surface) text-(--color-text-secondary) border border-(--color-border-subtle)">{{ tag }}</span>
+              <span v-for="tag in formatInfo.tags" :key="tag" class="px-2 py-0.5 rounded text-[10px] bg-(--color-bg-surface) text-(--color-text-secondary) border border-(--color-border-subtle)">{{ tag }}</span>
             </div>
           </div>
         </div>

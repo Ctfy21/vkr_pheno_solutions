@@ -1,13 +1,21 @@
 from datetime import datetime, timezone
-import csv
 import io
+import json
 import zipfile
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
+from app.analyze import measure_plant_height, plantcv_rgb_analysis, create_annotated_image
 from app.auth import get_current_user
 from app.database import get_db_dep, get_brapi_db_dep
+from app.export import build_csv, build_pdf, build_xlsx
+from app.image_meta import content_disposition, sha256_hex
 from app.models.schemas import StudyCreate, StudyOut, new_id
+from app.routers.export import build_export, export_response
+from app.routers.images import public_image
+from app.storage import StorageNotFound, get_storage_dep
+from app.study_data import load_study_data
+from app.trait_analysis import collect_records, summarize
 
 
 class RunAnalysisRequest(BaseModel):
@@ -49,8 +57,7 @@ async def get_observation_units(study_id: str, brapi_db=Depends(get_brapi_db_dep
         # Attach images from local db
         imgs = []
         async for img in db["images"].find({"observationUnitId": doc["id"]}):
-            img["id"] = img.pop("_id")
-            imgs.append(img)
+            imgs.append(public_image(img))
         doc["images"] = imgs
         items.append(doc)
     return items
@@ -61,17 +68,14 @@ async def get_study_images(study_id: str, brapi_db=Depends(get_brapi_db_dep), db
     ou_ids = []
     async for doc in brapi_db["observation_units"].find({"studyId": study_id}, {"_id": 1}):
         ou_ids.append(doc["_id"])
-    items = []
+    items = {}
     if ou_ids:
         async for img in db["images"].find({"observationUnitId": {"$in": ou_ids}}):
-            img["id"] = img.pop("_id")
-            items.append(img)
+            items[img["_id"]] = public_image(img)
     # Also get images linked directly by studyId
     async for img in db["images"].find({"studyId": study_id}):
-        img["id"] = img.pop("_id")
-        if not any(i["id"] == img["id"] for i in items):
-            items.append(img)
-    return items
+        items.setdefault(img["_id"], public_image(img))
+    return list(items.values())
 
 
 @router.post("")
@@ -117,9 +121,62 @@ async def delete_study(item_id: str, brapi_db=Depends(get_brapi_db_dep), user=De
     return {"ok": True}
 
 
+# CropOntology term -> (metric produced by the algorithm, default unit)
+METRIC_MAP = {
+    "CO_321:0000020": ("height_cm", "см"),
+    "CO_321:0000080": ("leaf_area_cm2", "см²"),
+}
+RAW_KEYS = ["height_cm", "leaf_area_cm2", "height_px", "green_area_px", "scale_px_per_cm", "height_ratio"]
+RAW_KEYS_RGB = ["green_index", "compactness", "bbox_width_cm"]
+
+
+def _pick_algorithm(solution: dict):
+    """Choose the analysis function by the solution config, falling back to its name."""
+    method = (solution.get("config") or {}).get("method", "")
+    name = solution.get("name", "").lower()
+    if method.startswith("plantcv_rgb") or "plantcv" in name or "rgb" in name:
+        return plantcv_rgb_analysis
+    return measure_plant_height
+
+
+def _measurements(measurement: dict, output_vars: list) -> list:
+    out = []
+    for ov in output_vars:
+        co_id = ov.get("coTermId", "")
+        var_name = ov.get("name", "") or co_id
+        metric, default_unit = METRIC_MAP.get(co_id, (None, ""))
+        if metric is None:
+            low = var_name.lower()
+            metric = "leaf_area_cm2" if ("area" in low or "leaf" in low or "площад" in low) else "height_cm"
+            default_unit = "см²" if metric == "leaf_area_cm2" else "см"
+        value = float(measurement.get(metric, 0.0) or 0.0)
+        unit = ov.get("unit") or default_unit
+        out.append({
+            "coTermId": co_id,
+            "variableName": var_name,
+            "value": round(value, 2),
+            "unit": unit,
+            "displayValue": f"{round(value, 2)} {unit}",
+        })
+    keys = RAW_KEYS + (RAW_KEYS_RGB if measurement.get("method", "").startswith("plantcv_rgb") else [])
+    for key in keys:
+        if key in measurement and not any(m["variableName"] == key for m in out):
+            val = measurement[key]
+            val = round(float(val), 4) if isinstance(val, float) else val
+            out.append({"coTermId": "", "variableName": key, "value": val, "unit": "", "displayValue": str(val)})
+    return out
+
+
 @router.post("/{study_id}/run-analysis")
-async def run_analysis(study_id: str, req: RunAnalysisRequest, db=Depends(get_db_dep), brapi_db=Depends(get_brapi_db_dep), user=Depends(get_current_user)):
-    """Run a phenotyping solution on a folder of images."""
+async def run_analysis(
+    study_id: str,
+    req: RunAnalysisRequest,
+    db=Depends(get_db_dep),
+    brapi_db=Depends(get_brapi_db_dep),
+    storage=Depends(get_storage_dep),
+    user=Depends(get_current_user),
+):
+    """Run a phenotyping solution on a folder of images and extract height and leaf area."""
     study = await brapi_db["studies"].find_one({"_id": study_id})
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
@@ -129,10 +186,8 @@ async def run_analysis(study_id: str, req: RunAnalysisRequest, db=Depends(get_db
         raise HTTPException(status_code=404, detail="Solution not found")
 
     images = []
-    async for img in db["images"].find({"studyId": study_id, "folderName": req.folder_name}):
-        img["id"] = img.pop("_id")
+    async for img in db["images"].find({"studyId": study_id, "folderName": req.folder_name}).sort("capturedAt", 1):
         images.append(img)
-
     if not images:
         raise HTTPException(status_code=400, detail="No images in this folder")
 
@@ -142,6 +197,7 @@ async def run_analysis(study_id: str, req: RunAnalysisRequest, db=Depends(get_db
     sol_config = solution.get("config", {})
     output_vars = solution.get("outputVariables", [])
     scale_px_per_cm = sol_config.get("scale_px_per_cm", 10.0)
+    algorithm = _pick_algorithm(solution)
 
     run_id = new_id()
     run_doc = {
@@ -159,124 +215,49 @@ async def run_analysis(study_id: str, req: RunAnalysisRequest, db=Depends(get_db
         "results": [],
     }
 
-    from bson import ObjectId
-    from motor.motor_asyncio import AsyncIOMotorGridFSBucket
-    from app.analyze import measure_plant_height, plantcv_rgb_analysis, create_annotated_image
-
-    fs = AsyncIOMotorGridFSBucket(db)
-
     for img in images:
-        plant_name = img.get("matchedPlantName", "")
-        gridfs_id = img.get("gridfsId")
-
         result_entry = {
-            "imageId": img["id"],
+            "imageId": img["_id"],
             "fileName": img.get("fileName", ""),
-            "plantName": plant_name,
+            "plantName": img.get("matchedPlantName", ""),
+            "capturedAt": img.get("capturedAt", ""),
             "measurements": [],
             "metrics": {},
         }
-
-        if gridfs_id:
+        try:
+            image_bytes = await storage.get(img.get("gridfsId", ""))
+            if img.get("sha256") and sha256_hex(image_bytes) != img["sha256"]:
+                raise ValueError("integrity check failed: stored file does not match its checksum")
+            measurement = algorithm(image_bytes, scale_px_per_cm=scale_px_per_cm)
+            if measurement.get("error"):
+                raise ValueError(measurement["error"])
+            result_entry["metrics"] = measurement
             try:
-                stream = await fs.open_download_stream(ObjectId(gridfs_id))
-                image_bytes = await stream.read()
-                sol_name = solution.get("name", "")
-                if "PlantCV" in sol_name or "RGB" in sol_name or "plantcv" in sol_name.lower() or "rgb" in sol_name.lower():
-                    measurement = plantcv_rgb_analysis(image_bytes, scale_px_per_cm=scale_px_per_cm)
-                else:
-                    measurement = measure_plant_height(image_bytes, scale_px_per_cm=scale_px_per_cm)
-                result_entry["metrics"] = measurement
-
-                try:
-                    annotated_bytes = create_annotated_image(image_bytes, measurement)
-                    ann_id = await fs.upload_from_stream(
-                        f"annotated_{img.get('fileName', 'img')}",
-                        annotated_bytes,
-                        metadata={"type": "annotated", "originalImageId": img["id"], "studyId": study_id}
-                    )
-                    result_entry["annotatedImageId"] = str(ann_id)
-                except Exception:
-                    pass
-
-                is_plantcv = measurement.get("method", "").startswith("plantcv_rgb")
-                if is_plantcv:
-                    metric_map = {
-                        "CO_321:0000020": ("height_cm", "cm"),
-                        "CO_321:0000080": ("leaf_area_cm2", "cm2"),
-                    }
-                else:
-                    metric_map = {
-                        "CO_321:0000020": ("height_cm", "cm"),
-                        "CO_321:0000080": ("green_area_px", "px"),
-                    }
-                for ov in output_vars:
-                    co_id = ov.get("coTermId", "")
-                    unit = ov.get("unit", "")
-                    var_name = ov.get("name", "")
-
-                    mapped = metric_map.get(co_id)
-                    if mapped:
-                        value = measurement.get(mapped[0], 0.0)
-                        if not unit:
-                            unit = mapped[1]
-                    elif "height" in var_name.lower():
-                        value = measurement.get("height_cm", 0.0)
-                    elif "area" in var_name.lower() or "leaf" in var_name.lower():
-                        value = measurement.get("green_area_px", 0)
-                    else:
-                        value = measurement.get("height_cm", 0.0)
-
-                    result_entry["measurements"].append({
-                        "coTermId": co_id,
-                        "variableName": var_name,
-                        "value": round(float(value), 2),
-                        "unit": unit,
-                        "displayValue": f"{round(float(value), 2)} {unit}",
-                    })
-
-                raw_keys = ["height_px", "height_cm", "green_area_px", "scale_px_per_cm", "height_ratio"]
-                if measurement.get("method", "").startswith("plantcv_rgb"):
-                    raw_keys.extend(["leaf_area_cm2", "green_index", "compactness", "bbox_width_cm"])
-                for key in raw_keys:
-                    if key in measurement and not any(m["variableName"] == key for m in result_entry["measurements"]):
-                        val = measurement[key]
-                        result_entry["measurements"].append({
-                            "coTermId": "",
-                            "variableName": key,
-                            "value": round(float(val), 4) if isinstance(val, float) else val,
-                            "unit": "",
-                            "displayValue": str(round(float(val), 4) if isinstance(val, float) else val),
-                        })
-
-                if result_entry["measurements"]:
-                    m = result_entry["measurements"][0]
-                    result_entry["metric"] = m["variableName"]
-                    result_entry["value"] = m["displayValue"]
-                else:
-                    result_entry["metric"] = "raw"
-                    result_entry["value"] = str(measurement)
-
-                await db["images"].update_one(
-                    {"_id": img["id"]},
-                    {"$set": {"status": "processed"}},
+                annotated = create_annotated_image(image_bytes, measurement)
+                result_entry["annotatedImageId"] = await storage.put(
+                    f"annotated_{img.get('fileName', 'img')}", annotated,
+                    metadata={"type": "annotated", "originalImageId": img["_id"], "studyId": study_id},
                 )
-            except Exception as e:
-                result_entry["metric"] = "error"
-                result_entry["value"] = str(e)
-        else:
+            except Exception:
+                pass
+            result_entry["measurements"] = _measurements(measurement, output_vars)
+            first = result_entry["measurements"][0] if result_entry["measurements"] else None
+            result_entry["metric"] = first["variableName"] if first else "raw"
+            result_entry["value"] = first["displayValue"] if first else ""
+            await db["images"].update_one({"_id": img["_id"]}, {"$set": {"status": "processed"}})
+        except StorageNotFound:
             result_entry["metric"] = "error"
             result_entry["value"] = "no file in storage"
-
+        except Exception as e:
+            result_entry["metric"] = "error"
+            result_entry["value"] = str(e)
         run_doc["results"].append(result_entry)
 
     await db["analysis_runs"].insert_one(run_doc)
-
     await brapi_db["studies"].update_one({"_id": study_id}, {"$set": {"status": "completed"}})
 
-    # Create notification
     try:
-        notif_doc = {
+        await db["notifications"].insert_one({
             "_id": new_id(),
             "userId": user.get("_id", ""),
             "type": "analysis_complete",
@@ -284,115 +265,87 @@ async def run_analysis(study_id: str, req: RunAnalysisRequest, db=Depends(get_db
             "message": f"{solution.get('name', '')} \u2014 {len(images)} изображений",
             "read": False,
             "createdAt": datetime.now(timezone.utc).isoformat(),
-        }
-        await db["notifications"].insert_one(notif_doc)
+        })
     except Exception:
         pass
 
-    run_doc["id"] = run_doc.pop("_id")
     return {"message": "Анализ завершён. Обработано " + str(len(images)) + " изображений.", "runId": run_id}
 
 
-@router.get("/{study_id}/export-zip")
-async def export_zip(study_id: str, db=Depends(get_db_dep), brapi_db=Depends(get_brapi_db_dep), user=Depends(get_current_user)):
-    """Export full study results as ZIP."""
-    from bson import ObjectId
-    from motor.motor_asyncio import AsyncIOMotorGridFSBucket
-    import openpyxl
-
-    study = await brapi_db["studies"].find_one({"_id": study_id})
-    if not study:
+@router.get("/{study_id}/trait-summary")
+async def get_trait_summary(study_id: str, db=Depends(get_db_dep), brapi_db=Depends(get_brapi_db_dep), user=Depends(get_current_user)):
+    """Statistics for plant height and leaf area: groups, dynamics, growth rates, correlation."""
+    data = await load_study_data(db, brapi_db, [study_id])
+    if not data.studies:
         raise HTTPException(status_code=404, detail="Study not found")
+    return summarize(collect_records(data.runs, data.images, data.plants))
 
-    runs = []
-    async for doc in db["analysis_runs"].find({"studyId": study_id}).sort("createdAt", -1):
-        runs.append(doc)
 
-    all_var_names = []
-    for run in runs:
-        for res in run.get("results", []):
-            for m in res.get("measurements", []):
-                vn = m.get("variableName", "")
-                if vn and vn not in all_var_names:
-                    all_var_names.append(vn)
+@router.get("/{study_id}/export")
+async def export_study(
+    study_id: str,
+    format: str = "xlsx",
+    variables: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    db=Depends(get_db_dep),
+    brapi_db=Depends(get_brapi_db_dep),
+    storage=Depends(get_storage_dep),
+    user=Depends(get_current_user),
+):
+    """Export one experiment: ?format=xlsx|pdf|csv|json&variables=name1,name2&date_from=YYYY-MM-DD."""
+    names = [v.strip() for v in variables.split(",") if v.strip()]
+    ds = await build_export(db, brapi_db, storage, user, [study_id], format,
+                            variable_names=names, date_from=date_from, date_to=date_to)
+    return export_response(ds, format)
 
-    csv_output = io.StringIO()
-    writer = csv.writer(csv_output)
-    header = ["run_id", "run_date", "solution", "folder", "image", "plant"] + all_var_names
-    writer.writerow(header)
 
-    csv_rows = []
-    for run in runs:
-        run_id = run.get("_id", "")
-        run_date = run.get("createdAt", "")
-        solution = run.get("solutionName", "")
-        folder = run.get("folderName", "")
-        for res in run.get("results", []):
-            row = [run_id, run_date, solution, folder, res.get("fileName", ""), res.get("plantName", "")]
-            var_vals = {}
-            for m in res.get("measurements", []):
-                var_vals[m.get("variableName", "")] = m.get("value", "")
-            for vn in all_var_names:
-                row.append(var_vals.get(vn, ""))
-            writer.writerow(row)
-            csv_rows.append(row)
-
-    csv_bytes = csv_output.getvalue().encode("utf-8-sig")
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Results"
-    ws.append(header)
-    for row in csv_rows:
-        ws.append(row)
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or "")) for cell in col)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
-    xlsx_buf = io.BytesIO()
-    wb.save(xlsx_buf)
-    xlsx_bytes = xlsx_buf.getvalue()
-
-    fs = AsyncIOMotorGridFSBucket(db)
+@router.get("/{study_id}/export-zip")
+async def export_zip(
+    study_id: str,
+    db=Depends(get_db_dep),
+    brapi_db=Depends(get_brapi_db_dep),
+    storage=Depends(get_storage_dep),
+    user=Depends(get_current_user),
+):
+    """Full study package: tables, PDF report, original and annotated images, checksum manifest."""
+    ds = await build_export(db, brapi_db, storage, user, [study_id], "pdf")
+    manifest = {"study": ds.title, "generatedAt": ds.generated_at, "files": {}}
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("results.csv", csv_bytes)
-        zf.writestr("results.xlsx", xlsx_bytes)
+        def add(path: str, data: bytes):
+            zf.writestr(path, data)
+            manifest["files"][path] = sha256_hex(data)
 
-        seen_originals = set()
-        for run in runs:
-            folder_name = run.get("folderName", "default")
+        add("results.csv", build_csv(ds))
+        add("results.xlsx", build_xlsx(ds))
+        add("report.pdf", build_pdf(ds))
+
+        seen = set()
+        data = await load_study_data(db, brapi_db, [study_id])
+        for run in data.runs:
+            folder = run.get("folderName") or "default"
             for res in run.get("results", []):
-                file_name = res.get("fileName", "unknown.jpg")
-                image_id = res.get("imageId", "")
-                annotated_id = res.get("annotatedImageId", "")
-
-                if image_id and image_id not in seen_originals:
-                    seen_originals.add(image_id)
-                    img_doc = await db["images"].find_one({"_id": image_id})
-                    if img_doc and img_doc.get("gridfsId"):
-                        try:
-                            stream = await fs.open_download_stream(ObjectId(img_doc["gridfsId"]))
-                            data = await stream.read()
-                            zf.writestr(f"dataset/{folder_name}/{file_name}", data)
-                        except Exception:
-                            pass
-
-                if annotated_id:
+                file_name = res.get("fileName") or "image.jpg"
+                img = data.images.get(res.get("imageId", ""))
+                if img and img["_id"] not in seen and img.get("gridfsId"):
+                    seen.add(img["_id"])
                     try:
-                        stream = await fs.open_download_stream(ObjectId(annotated_id))
-                        data = await stream.read()
-                        zf.writestr(f"results/{folder_name}/{file_name}", data)
-                    except Exception:
+                        add(f"dataset/{folder}/{file_name}", await storage.get(img["gridfsId"]))
+                    except StorageNotFound:
                         pass
+                if res.get("annotatedImageId"):
+                    try:
+                        add(f"results/{folder}/{file_name}", await storage.get(res["annotatedImageId"]))
+                    except StorageNotFound:
+                        pass
+        zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
-    zip_bytes = zip_buf.getvalue()
-    study_name = study.get("name", study_id).replace(" ", "_")
-    filename = f"{study_name}_export.zip"
-
-    return StreamingResponse(
-        io.BytesIO(zip_bytes),
+    study_name = (ds.title or study_id).replace(" ", "_")
+    return Response(
+        content=zip_buf.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": content_disposition("attachment", f"{study_name}_export.zip")},
     )
 
 @router.get("/{study_id}/analysis-runs")
@@ -442,49 +395,14 @@ async def get_matching_solutions(study_id: str, db=Depends(get_db_dep), brapi_db
 
 
 @router.get("/{study_id}/export-results-csv")
-async def export_results_csv(study_id: str, db=Depends(get_db_dep), brapi_db=Depends(get_brapi_db_dep), user=Depends(get_current_user)):
-    study = await brapi_db["studies"].find_one({"_id": study_id})
-    if not study:
-        raise HTTPException(status_code=404, detail="Study not found")
-
-    runs = []
-    async for doc in db["analysis_runs"].find({"studyId": study_id}).sort("createdAt", -1):
-        runs.append(doc)
-
-    if not runs:
+async def export_results_csv(
+    study_id: str,
+    db=Depends(get_db_dep),
+    brapi_db=Depends(get_brapi_db_dep),
+    storage=Depends(get_storage_dep),
+    user=Depends(get_current_user),
+):
+    ds = await build_export(db, brapi_db, storage, user, [study_id], "csv")
+    if not ds.rows:
         raise HTTPException(status_code=404, detail="No analysis runs found")
-
-    all_var_names = []
-    for run in runs:
-        for res in run.get("results", []):
-            for m in res.get("measurements", []):
-                vn = m.get("variableName", "")
-                if vn and vn not in all_var_names:
-                    all_var_names.append(vn)
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    header = ["run_id", "run_date", "solution", "folder", "image", "plant"] + all_var_names
-    writer.writerow(header)
-
-    for run in runs:
-        run_id = run.get("_id", "")
-        run_date = run.get("createdAt", "")
-        solution = run.get("solutionName", "")
-        folder = run.get("folderName", "")
-        for res in run.get("results", []):
-            row = [run_id, run_date, solution, folder, res.get("fileName", ""), res.get("plantName", "")]
-            var_vals = {}
-            for m in res.get("measurements", []):
-                var_vals[m.get("variableName", "")] = m.get("value", "")
-            for vn in all_var_names:
-                row.append(var_vals.get(vn, ""))
-            writer.writerow(row)
-
-    csv_bytes = output.getvalue().encode("utf-8-sig")
-    filename = f"results_{study_id}.csv"
-    return StreamingResponse(
-        io.BytesIO(csv_bytes),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+    return export_response(ds, "csv")

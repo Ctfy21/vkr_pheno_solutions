@@ -85,6 +85,36 @@ async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
   return res.json()
 }
 
+function filenameFromDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback
+  const utf = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (utf && utf[1]) return decodeURIComponent(utf[1])
+  const plain = /filename="?([^";]+)"?/i.exec(header)
+  return plain && plain[1] ? plain[1] : fallback
+}
+
+// Download a file produced by the API (export, archives) and hand it to the browser
+async function downloadFile(path: string, fallbackName: string, init: { method?: string; body?: unknown } = {}): Promise<void> {
+  const doFetch = () => fetch(`${API_BASE}${path}`, {
+    method: init.method || 'GET',
+    headers: authHeaders(),
+    body: init.body ? JSON.stringify(init.body) : undefined,
+  })
+  let res = await doFetch()
+  if (res.status === 401 && await tryRefreshToken()) res = await doFetch()
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filenameFromDisposition(res.headers.get('Content-Disposition'), fallbackName)
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function useApi() {
   return {
     get: <T>(path: string) => request<T>('GET', path),
@@ -92,6 +122,7 @@ export function useApi() {
     put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
     del: <T>(path: string) => request<T>('DELETE', path),
     upload: <T>(path: string, formData: FormData) => uploadFile<T>(path, formData),
+    download: downloadFile,
     getToken,
     setToken: (token: string) => localStorage.setItem('token', token),
     clearToken: () => { localStorage.removeItem('token'); localStorage.removeItem('refresh_token') },
