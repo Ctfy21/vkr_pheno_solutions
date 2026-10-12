@@ -314,3 +314,4 @@ MIT
 
 - [README.md](README.md) — быстрый старт и руководство пользователя
 - [SOLUTIONS.md](SOLUTIONS.md) — создание фенотипических решений (Dockerfile, манифест, outputVariables)
+- [site/README.md](site/README.md) — сайт стартап-проекта и его публикация на GitHub Pages
