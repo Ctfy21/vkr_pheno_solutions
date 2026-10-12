@@ -212,6 +212,18 @@ def build_xlsx(ds: ExportDataset) -> bytes:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
+    def p_format(ws, col: int):
+        cell = ws.cell(row=ws.max_row, column=col)
+        if isinstance(cell.value, float):
+            cell.number_format = "0.00E+00" if 0 < cell.value < 1e-4 else "0.0000"
+
+    def print_setup(ws):
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_options.gridLines = False
+
     def autosize(ws, min_width=8, max_width=45):
         widths: Dict[int, int] = {}
         for row in ws.iter_rows():
@@ -274,6 +286,7 @@ def build_xlsx(ds: ExportDataset) -> bytes:
         for t, c in comparisons:
             st.append([t["name"], c["group"], c["reference"], c["meanDiff"], c["t"], c["df"], c["pValue"],
                        "да" if c["significant"] else "нет"])
+            p_format(st, 7)
     else:
         st.append(["Недостаточно данных: нужны минимум две группы обработки по 2 и более растения."])
 
@@ -285,9 +298,10 @@ def build_xlsx(ds: ExportDataset) -> bytes:
         st.append(["n", "r", "p", "Связь значима"])
         style_header(st, st.max_row, 4)
         st.append([corr["n"], corr["r"], corr["pValue"], "да" if corr["significant"] else "нет"])
+        p_format(st, 3)
     else:
         st.append(["Недостаточно парных измерений (нужно не менее 3)."])
-    autosize(st, max_width=30)
+    autosize(st, max_width=40)
 
     # Dynamics with native Excel charts
     dyn = wb.create_sheet("Динамика")
@@ -351,6 +365,8 @@ def build_xlsx(ds: ExportDataset) -> bytes:
     meta.column_dimensions["A"].width = 24
     meta.column_dimensions["B"].width = 80
 
+    for sheet in wb.worksheets:
+        print_setup(sheet)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -589,6 +605,7 @@ def build_pdf(ds: ExportDataset) -> bytes:
             for ax in (sp.xValueAxis, sp.yValueAxis):
                 ax.labels.fontName = regular
                 ax.labels.fontSize = 7
+                ax.valueMin = 0
             d.add(sp)
             story.append(KeepTogether([d, Spacer(1, 4)]))
         else:

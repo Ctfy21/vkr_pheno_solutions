@@ -36,10 +36,25 @@ def _check_date(value: str, field: str) -> str:
     return value
 
 
+def _thumbnail_order(rows: list) -> list:
+    """Annotated rows, latest capture first, alternating treatment groups so each group is shown."""
+    candidates = sorted((r for r in rows if r.get("annotatedImageId")),
+                        key=lambda r: r.get("capturedAt") or "", reverse=True)
+    queues: dict = {}
+    for r in candidates:
+        queues.setdefault(r.get("treatment") or "", []).append(r)
+    ordered = []
+    while any(queues.values()):
+        for q in queues.values():
+            if q:
+                ordered.append(q.pop(0))
+    return ordered
+
+
 async def _thumbnails(storage, ds: ExportDataset) -> list:
     values = {(r["imageId"], r["trait"]): r["value"] for r in ds.records}
     thumbs = []
-    for row in ds.rows:
+    for row in _thumbnail_order(ds.rows):
         if len(thumbs) >= PDF_MAX_THUMBNAILS:
             break
         file_id = row.get("annotatedImageId")

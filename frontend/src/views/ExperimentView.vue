@@ -97,8 +97,12 @@ async function downloadExport(kind: 'xlsx' | 'pdf' | 'csv' | 'zip') {
 }
 const downloadCsv = () => downloadExport('csv')
 
+// Capture time is stored in UTC; show it in the viewer's local time zone
 function formatCaptured(iso?: string) {
-  return iso ? iso.slice(0, 16).replace('T', ' ') : ''
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // Upload in chunks: keeps each request under the ingress body limit and passes
@@ -740,10 +744,10 @@ const statusMap: Record<string, string> = {
                 <div class="max-h-48 overflow-y-auto space-y-1">
                   <div v-for="(r, ri) in uploadResults" :key="r.id || 'rejected-' + ri"
                     class="flex items-center justify-between gap-3 px-3 py-2 bg-(--color-bg-base) border border-(--color-border-subtle) rounded-lg text-xs">
-                    <span class="font-mono text-(--color-text-primary) truncate">{{ r.fileName }}</span>
+                    <span class="font-mono text-(--color-text-primary) truncate">{{ r.uploadedName || r.fileName }}</span>
                     <span v-if="r.error" class="text-(--color-accent-rose) text-right">{{ r.error }}</span>
                     <span v-else class="flex items-center gap-2 flex-shrink-0">
-                      <span v-if="r.duplicate" class="text-(--color-accent-amber)">уже загружен</span>
+                      <span v-if="r.duplicate" class="text-(--color-accent-amber)">{{ r.uploadedName && r.uploadedName !== r.fileName ? 'уже загружен как ' + r.fileName : 'уже загружен' }}</span>
                       <span class="text-(--color-text-muted)" :title="'Источник времени: ' + r.capturedAtSource">{{ formatCaptured(r.capturedAt) }}</span>
                       <span :class="r.matchedPlantName ? 'text-(--color-accent-green)' : 'text-(--color-text-muted)'">
                         {{ r.matchedPlantName || 'не привязано' }}

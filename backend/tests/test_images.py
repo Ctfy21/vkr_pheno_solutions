@@ -128,7 +128,7 @@ class TestUpload:
         batch = await upload(client, auth_headers, [("x.jpg", b"not an image", "image/jpeg"),
                                                     ("ok.png", plant_image(), "image/png")], studyId="st1")
         results = batch.json()
-        assert results[0]["status"] == "rejected" and "Unsupported" in results[0]["error"]
+        assert results[0]["status"] == "rejected" and "Неподдерживаемый формат" in results[0]["error"]
         assert results[1]["status"] == "pending"
         assert await db.images.count_documents({}) == 1
 
@@ -144,6 +144,7 @@ class TestUpload:
         first = await upload(client, auth_headers, [("a.png", content, "image/png")], studyId="st1")
         second = await upload(client, auth_headers, [("copy.png", content, "image/png")], studyId="st1")
         assert second.json()[0]["duplicate"] is True
+        assert second.json()[0]["uploadedName"] == "copy.png" and second.json()[0]["fileName"] == "a.png"
         assert second.json()[0]["id"] == first.json()[0]["id"]
         assert await db.images.count_documents({}) == 1
         assert len(storage.files) == 1

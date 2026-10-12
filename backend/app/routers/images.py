@@ -104,7 +104,7 @@ async def _audit(db, action: str, user: Optional[dict], request: Optional[Reques
 async def _read_limited(file: UploadFile) -> bytes:
     data = await file.read(IMAGE_MAX_BYTES + 1)
     if len(data) > IMAGE_MAX_BYTES:
-        raise RejectedFile(413, f"File exceeds {IMAGE_MAX_MB} MB limit")
+        raise RejectedFile(413, f"Файл больше {IMAGE_MAX_MB} МБ")
     return data
 
 
@@ -124,10 +124,10 @@ async def _ingest(
 ) -> dict:
     name = safe_filename(file_name)
     if not data:
-        raise RejectedFile(400, "Empty file")
+        raise RejectedFile(400, "Пустой файл")
     mime = detect_image_type(data)
     if mime is None:
-        raise RejectedFile(415, "Unsupported file type (JPEG, PNG, TIFF, BMP, WebP are accepted)")
+        raise RejectedFile(415, "Неподдерживаемый формат: принимаются JPEG, PNG, TIFF, BMP и WebP")
 
     digest = sha256_hex(data)
     if study_id:
@@ -135,6 +135,7 @@ async def _ingest(
         if existing:
             out = public_image(existing)
             out["duplicate"] = True
+            out["uploadedName"] = name
             return out
 
     now = datetime.now(timezone.utc)

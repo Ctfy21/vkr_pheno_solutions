@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from app.export import build_csv, build_dataset, build_json, build_pdf, build_xlsx
+from app.routers.export import _thumbnail_order
 from tests.test_analysis import seed_experiment
 
 
@@ -71,6 +72,7 @@ class TestBuilders:
         assert "Высота растения" in stats_text and "Площадь проекции листовой поверхности" in stats_text
         assert "Уэлча" in stats_text
         assert len(wb["Динамика"]._charts) == 2
+        assert all(sheet.page_setup.orientation == "landscape" for sheet in wb.worksheets)
 
     def test_pdf_contains_cyrillic_report(self):
         content = build_pdf(build_dataset(*small_dataset(), generated_by="admin@test.ru"))
@@ -90,6 +92,14 @@ class TestBuilders:
         assert payload["metadata"]["studies"][0]["studyName"] == "Опыт"
         assert len(payload["observations"]) == 12
         assert payload["observations"][0]["observationVariablePUI"] == "CO_321:0000020"
+
+
+    def test_thumbnails_cover_latest_date_of_each_group(self):
+        rows = [{"annotatedImageId": f"a{i}", "capturedAt": f"2026-03-0{d}T09:00:00Z", "treatment": t}
+                for i, (d, t) in enumerate([(1, "Контроль"), (1, "Засуха"), (8, "Контроль"), (8, "Засуха"), (8, "Контроль")])]
+        rows.append({"annotatedImageId": "", "capturedAt": "2026-03-09T09:00:00Z", "treatment": "Контроль"})
+        order = [r["annotatedImageId"] for r in _thumbnail_order(rows)]
+        assert order == ["a2", "a3", "a4", "a1", "a0"]
 
 
 class TestEndpoints:

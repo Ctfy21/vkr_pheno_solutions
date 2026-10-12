@@ -101,6 +101,11 @@ def _r(value: Optional[float], digits: int = 3) -> Optional[float]:
     return round(value, digits)
 
 
+def _p(value: float) -> float:
+    """p-values keep three significant digits so very small values do not round to zero."""
+    return float(f"{value:.3g}")
+
+
 def describe(values: Iterable[float]) -> dict:
     vals = sorted(float(v) for v in values)
     n = len(vals)
@@ -139,7 +144,7 @@ def welch_test(a: List[float], b: List[float]) -> Optional[dict]:
     t = (m1 - m2) / math.sqrt(se2)
     df = se2 ** 2 / ((v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1))
     p = t_two_sided_p(t, df)
-    return {"meanDiff": _r(m1 - m2), "t": _r(t), "df": _r(df, 1), "pValue": _r(p, 4), "significant": p < _ALPHA}
+    return {"meanDiff": _r(m1 - m2), "t": _r(t), "df": _r(df, 1), "pValue": _p(p), "significant": p < _ALPHA}
 
 
 def pearson(xs: List[float], ys: List[float]) -> Optional[dict]:
@@ -157,7 +162,7 @@ def pearson(xs: List[float], ys: List[float]) -> Optional[dict]:
         p = 0.0
     else:
         p = t_two_sided_p(r * math.sqrt((n - 2) / (1 - r * r)), n - 2)
-    return {"n": n, "r": _r(r, 4), "pValue": _r(p, 4), "significant": p < _ALPHA}
+    return {"n": n, "r": _r(r, 4), "pValue": _p(p), "significant": p < _ALPHA}
 
 
 # ─── Records from analysis runs ──────────────────────────────────
