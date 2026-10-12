@@ -331,17 +331,45 @@ def build_xlsx(ds: ExportDataset) -> bytes:
             d = dyn_index[t["key"]].get(day)
             row += [d["mean"], d["sd"], d["n"]] if d else [None, None, None]
         dyn.append(row)
+    # Means per treatment group under the overall table; the charts plot one line per group
+    group_blocks = []
+    for t in ds.summary["traits"]:
+        groups = [g for g in t.get("dynamicsByTreatment", []) if g["points"]]
+        if not groups:
+            group_blocks.append(None)
+            continue
+        dyn.append([])
+        dyn.append([f"{t['name']}: среднее по группам ({t['unit']})"])
+        dyn.cell(row=dyn.max_row, column=1).font = Font(bold=True)
+        dyn.append(["Дата съёмки"] + [g["treatment"] or "Без обработки" for g in groups])
+        header_row = dyn.max_row
+        style_header(dyn, header_row, len(groups) + 1)
+        means = [{p["date"]: p["mean"] for p in g["points"]} for g in groups]
+        for day in dates:
+            dyn.append([day] + [m.get(day) for m in means])
+        group_blocks.append((header_row, len(groups)))
     autosize(dyn, max_width=28)
     if len(dates) >= 2:
         for i, t in enumerate(ds.summary["traits"]):
             chart = LineChart()
-            chart.title = f"{t['name']}: среднее по дате съёмки"
             chart.y_axis.title = t["unit"]
             chart.x_axis.title = "Дата"
             chart.height, chart.width = 7.5, 16
-            col = 2 + i * 3
-            chart.add_data(Reference(dyn, min_col=col, min_row=1, max_row=len(dates) + 1), titles_from_data=True)
-            chart.set_categories(Reference(dyn, min_col=1, min_row=2, max_row=len(dates) + 1))
+            block = group_blocks[i]
+            if block:
+                header_row, n_groups = block
+                chart.title = f"{t['name']}: среднее по группам"
+                chart.add_data(Reference(dyn, min_col=2, max_col=1 + n_groups, min_row=header_row,
+                                         max_row=header_row + len(dates)), titles_from_data=True)
+                chart.set_categories(Reference(dyn, min_col=1, min_row=header_row + 1, max_row=header_row + len(dates)))
+            else:
+                chart.title = f"{t['name']}: среднее по дате съёмки"
+                col = 2 + i * 3
+                chart.add_data(Reference(dyn, min_col=col, min_row=1, max_row=len(dates) + 1), titles_from_data=True)
+                chart.set_categories(Reference(dyn, min_col=1, min_row=2, max_row=len(dates) + 1))
+            for series in chart.series:
+                series.smooth = False  # straight segments between capture dates, no invented curve
+                series.marker.symbol = "circle"
             dyn.add_chart(chart, f"{get_column_letter(len(dyn_headers) + 2)}{2 + i * 16}")
 
     # Growth per plant

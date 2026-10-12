@@ -71,7 +71,11 @@ class TestBuilders:
         stats_text = " ".join(str(c.value) for row in wb["Статистика"].iter_rows() for c in row if c.value)
         assert "Высота растения" in stats_text and "Площадь проекции листовой поверхности" in stats_text
         assert "Уэлча" in stats_text
-        assert len(wb["Динамика"]._charts) == 2
+        dyn = wb["Динамика"]
+        assert len(dyn._charts) == 2
+        dyn_rows = [[c.value for c in row] for row in dyn.iter_rows()]
+        group_header = next(r for r in dyn_rows if r[0] == "Дата съёмки" and "Контроль" in r)
+        assert len(dyn._charts[0].series) == len([v for v in group_header[1:] if v])
         assert all(sheet.page_setup.orientation == "landscape" for sheet in wb.worksheets)
 
     def test_pdf_contains_cyrillic_report(self):
