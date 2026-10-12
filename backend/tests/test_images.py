@@ -4,8 +4,8 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from app.config import SIGNED_URL_SECRET
-from app.image_meta import (content_disposition, detect_image_type, parse_datetime, resolve_capture_time,
-                            safe_filename, sign_link, verify_link)
+from app.image_meta import (content_disposition, detect_image_type, local_timezone, parse_datetime,
+                            resolve_capture_time, safe_filename, sign_link, verify_link)
 from app.routers import images as images_router
 from tests.helpers import plant_image
 
@@ -53,6 +53,12 @@ class TestHelpers:
         assert parse_datetime("1772359200000").isoformat() == "2026-03-01T10:00:00+00:00"  # browser lastModified, ms
         assert parse_datetime("not a date") is None
 
+    def test_local_timezone_from_browser_offset(self):
+        assert local_timezone(-180).utcoffset(None).total_seconds() == 3 * 3600
+        assert local_timezone("0").utcoffset(None).total_seconds() == 0
+        assert local_timezone(None).utcoffset(None).total_seconds() == 0
+        assert local_timezone(99999).utcoffset(None).total_seconds() == 0
+
     def test_capture_time_priority_and_sanity(self):
         now = parse_datetime("2026-04-01T00:00:00Z")
         exif = parse_datetime("2026-03-01T10:00:00Z")
@@ -97,6 +103,13 @@ class TestUpload:
         assert img["uploadedBy"] == "admin@test.ru"
         assert "url" in img and "sig=" in img["url"]
         assert await db.image_audit.count_documents({"action": "upload"}) == 1
+
+    async def test_exif_without_offset_uses_uploader_time_zone(self, client, auth_headers, brapi_db):
+        await create_study(brapi_db)
+        content = plant_image(exif_time="2026:03:01 13:15:00")
+        resp = await upload(client, auth_headers, [("a.jpg", content, "image/jpeg")], studyId="st1", tzOffsetMinutes="-180")
+        assert resp.json()[0]["capturedAt"] == "2026-03-01T10:15:00Z"
+        assert resp.json()[0]["capturedAtSource"] == "exif"
 
     async def test_client_time_used_without_exif(self, client, auth_headers, brapi_db):
         await create_study(brapi_db)

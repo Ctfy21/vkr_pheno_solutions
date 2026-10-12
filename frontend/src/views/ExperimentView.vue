@@ -106,7 +106,8 @@ function formatCaptured(iso?: string) {
 }
 
 // Upload in chunks: keeps each request under the ingress body limit and passes
-// the file modification time as a fallback capture time when the photo has no EXIF
+// the file modification time as a fallback capture time when the photo has no EXIF,
+// plus the browser time zone for EXIF times written without one
 const UPLOAD_CHUNK = 20
 async function uploadInChunks(path: string, files: File[], fields: Record<string, string>) {
   const results: any[] = []
@@ -116,6 +117,7 @@ async function uploadInChunks(path: string, files: File[], fields: Record<string
       formData.append('files', f)
       formData.append('capturedAt', new Date(f.lastModified).toISOString())
     }
+    formData.append('tzOffsetMinutes', String(new Date().getTimezoneOffset()))
     for (const [k, v] of Object.entries(fields)) formData.append(k, v)
     const chunk = await api.upload<any[]>(path, formData)
     results.push(...(Array.isArray(chunk) ? chunk : [chunk]))

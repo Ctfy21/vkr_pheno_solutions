@@ -93,7 +93,21 @@ def parse_datetime(value) -> Optional[datetime]:
     return dt.astimezone(timezone.utc)
 
 
-def _parse_exif_datetime(value, offset=None) -> Optional[datetime]:
+def local_timezone(offset_minutes) -> timezone:
+    """
+    Time zone of the uploader's browser from JavaScript getTimezoneOffset()
+    (minutes behind UTC, so Moscow is -180). Falls back to UTC.
+    """
+    try:
+        minutes = int(offset_minutes)
+    except (TypeError, ValueError):
+        return timezone.utc
+    if abs(minutes) > 14 * 60:
+        return timezone.utc
+    return timezone(timedelta(minutes=-minutes))
+
+
+def _parse_exif_datetime(value, offset=None, default_tz: timezone = timezone.utc) -> Optional[datetime]:
     if not value:
         return None
     text = str(value).strip().replace("\x00", "")
@@ -101,7 +115,8 @@ def _parse_exif_datetime(value, offset=None) -> Optional[datetime]:
         dt = datetime.strptime(text, "%Y:%m:%d %H:%M:%S")
     except ValueError:
         return None
-    tz = timezone.utc
+    # Cameras write local time; without OffsetTimeOriginal assume the uploader's zone
+    tz = default_tz
     if offset:
         m = re.fullmatch(r"([+-])(\d{2}):(\d{2})", str(offset).strip())
         if m:
@@ -110,7 +125,7 @@ def _parse_exif_datetime(value, offset=None) -> Optional[datetime]:
     return dt.replace(tzinfo=tz).astimezone(timezone.utc)
 
 
-def read_exif(data: bytes) -> dict:
+def read_exif(data: bytes, default_tz: timezone = timezone.utc) -> dict:
     """Return capture time and basic camera info found in the image, if any."""
     info: dict = {}
     try:
@@ -127,9 +142,9 @@ def read_exif(data: bytes) -> dict:
     except Exception:
         sub = {}
     captured = (
-        _parse_exif_datetime(sub.get(_TAG_DATETIME_ORIGINAL), sub.get(_TAG_OFFSET_TIME_ORIGINAL))
-        or _parse_exif_datetime(sub.get(_TAG_DATETIME_DIGITIZED), sub.get(_TAG_OFFSET_TIME_ORIGINAL))
-        or _parse_exif_datetime(exif.get(_TAG_DATETIME))
+        _parse_exif_datetime(sub.get(_TAG_DATETIME_ORIGINAL), sub.get(_TAG_OFFSET_TIME_ORIGINAL), default_tz)
+        or _parse_exif_datetime(sub.get(_TAG_DATETIME_DIGITIZED), sub.get(_TAG_OFFSET_TIME_ORIGINAL), default_tz)
+        or _parse_exif_datetime(exif.get(_TAG_DATETIME), None, default_tz)
     )
     if captured:
         info["capturedAt"] = captured

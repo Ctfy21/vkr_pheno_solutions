@@ -27,6 +27,7 @@ from app.image_meta import (
     content_disposition,
     detect_image_type,
     parse_datetime,
+    local_timezone,
     read_exif,
     resolve_capture_time,
     safe_filename,
@@ -121,6 +122,7 @@ async def _ingest(
     client_time,
     user: dict,
     request: Request,
+    tz_offset_minutes=None,
 ) -> dict:
     name = safe_filename(file_name)
     if not data:
@@ -139,7 +141,7 @@ async def _ingest(
             return out
 
     now = datetime.now(timezone.utc)
-    exif = read_exif(data)
+    exif = read_exif(data, local_timezone(tz_offset_minutes))
     captured_at, source = resolve_capture_time(exif.get("capturedAt"), parse_datetime(client_time), now)
 
     image_id = new_id()
@@ -176,7 +178,7 @@ async def _ingest(
     return public_image(doc)
 
 
-async def _ingest_many(db, storage, files, captured_at, *, study_id, folder_name, plant_lookup, user, request):
+async def _ingest_many(db, storage, files, captured_at, *, study_id, folder_name, plant_lookup, user, request, tz_offset_minutes=None):
     times = captured_at if len(captured_at) == len(files) else [None] * len(files)
     results = []
     for file, client_time in zip(files, times):
@@ -187,7 +189,7 @@ async def _ingest_many(db, storage, files, captured_at, *, study_id, folder_name
                 db, storage,
                 data=data, file_name=file.filename, study_id=study_id, folder_name=folder_name,
                 observation_unit_id=ou_id, plant_name=plant_name, client_time=client_time,
-                user=user, request=request,
+                user=user, request=request, tz_offset_minutes=tz_offset_minutes,
             ))
         except RejectedFile as e:
             await _audit(db, "upload_rejected", user, request, "", study_id, fileName=safe_filename(file.filename), reason=e.detail)
@@ -207,6 +209,7 @@ async def upload_image(
     studyId: str = Form(""),
     folderName: str = Form(""),
     capturedAt: str = Form(""),
+    tzOffsetMinutes: Optional[int] = Form(None),
     db=Depends(get_db_dep),
     storage=Depends(get_storage_dep),
     user=Depends(get_current_user),
@@ -217,7 +220,7 @@ async def upload_image(
             db, storage,
             data=data, file_name=file.filename, study_id=studyId, folder_name=folderName,
             observation_unit_id=observationUnitId, plant_name="", client_time=capturedAt,
-            user=user, request=request,
+            user=user, request=request, tz_offset_minutes=tzOffsetMinutes,
         )
     except RejectedFile as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -230,6 +233,7 @@ async def upload_batch(
     studyId: str = Form(""),
     folderName: str = Form(""),
     capturedAt: List[str] = Form(default=[]),
+    tzOffsetMinutes: Optional[int] = Form(None),
     db=Depends(get_db_dep),
     brapi_db=Depends(get_brapi_db_dep),
     storage=Depends(get_storage_dep),
@@ -246,7 +250,7 @@ async def upload_batch(
 
     return await _ingest_many(
         db, storage, files, capturedAt,
-        study_id=studyId, folder_name=folderName, plant_lookup=lookup, user=user, request=request,
+        study_id=studyId, folder_name=folderName, plant_lookup=lookup, user=user, request=request, tz_offset_minutes=tzOffsetMinutes,
     )
 
 
@@ -258,6 +262,7 @@ async def upload_plant_images(
     folderName: str = Form(""),
     observationUnitId: str = Form(""),
     capturedAt: List[str] = Form(default=[]),
+    tzOffsetMinutes: Optional[int] = Form(None),
     db=Depends(get_db_dep),
     brapi_db=Depends(get_brapi_db_dep),
     storage=Depends(get_storage_dep),
@@ -273,7 +278,7 @@ async def upload_plant_images(
         db, storage, files, capturedAt,
         study_id=studyId, folder_name=folderName,
         plant_lookup=lambda _name: (observationUnitId, plant_name),
-        user=user, request=request,
+        user=user, request=request, tz_offset_minutes=tzOffsetMinutes,
     )
 
 
