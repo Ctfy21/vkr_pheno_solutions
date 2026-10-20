@@ -5,9 +5,12 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { useSignedImages } from '@/composables/useSignedImages'
+import TraitSummaryPanel from '@/components/TraitSummaryPanel.vue'
 
 const route = useRoute()
 const api = useApi()
+const { imageUrl, annotatedUrl } = useSignedImages()
 const studyId = computed(() => route.params.studyId as string)
 
 const study = ref<any>(null)
@@ -23,7 +26,7 @@ const tabs = [
 
 const expandedRun = ref<string | null>(null)
 // ─── Results tab state ───────────────────────────────────────
-const resultsSubTab = ref<'runs' | 'table'>('runs')
+const resultsSubTab = ref<'runs' | 'table' | 'stats'>('runs')
 const expandedRunId = ref<string | null>(null)
 const selectedFolder = ref<string | null>(null)
 const lightboxImage = ref<any>(null)
@@ -32,8 +35,6 @@ const chartCanvas = ref<HTMLCanvasElement | null>(null)
 let chartInstance: any = null
 
 function toggleRunResult(id: string) { expandedRunId.value = expandedRunId.value === id ? null : id }
-function imageUrl(imageId: string) { return imageId ? `/api/images/file/${imageId}` : '' }
-function annotatedUrl(annotatedImageId: string) { return annotatedImageId ? `/api/images/annotated/${annotatedImageId}` : '' }
 function openLightbox(img: any) { lightboxImage.value = img }
 function closeLightbox() { lightboxImage.value = null }
 
@@ -80,30 +81,53 @@ const totalImages = computed(() => analysisRuns.value.reduce((s: number, r: any)
 const totalMeasurements = computed(() => allMeasurements.value.length)
 
 
-async function downloadZip() {
+const exporting = ref<string | null>(null)
+
+async function downloadExport(kind: 'xlsx' | 'pdf' | 'csv' | 'zip') {
+  exporting.value = kind
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/studies/' + studyId.value + '/export-zip', { headers: token ? { Authorization: 'Bearer ' + token } : {} })
-    if (!res.ok) throw new Error('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'export_' + studyId.value + '.zip'; a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) { alert('Ошибка экспорта: ' + e.message) }
+    const path = kind === 'zip'
+      ? `/studies/${studyId.value}/export-zip`
+      : `/studies/${studyId.value}/export?format=${kind}`
+    await api.download(path, `export_${studyId.value}.${kind}`)
+  } catch (e: any) {
+    alert('Ошибка экспорта: ' + (e.message || 'unknown'))
+  }
+  exporting.value = null
+}
+const downloadCsv = () => downloadExport('csv')
+
+// Capture time is stored in UTC; show it in the viewer's local time zone
+function formatCaptured(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-async function downloadCsv() {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/studies/' + studyId.value + '/export-results-csv', { headers: token ? { Authorization: 'Bearer ' + token } : {} })
-    if (!res.ok) throw new Error('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'results_' + studyId.value + '.csv'; a.click()
-    URL.revokeObjectURL(url)
-  } catch (e: any) { alert('Ошибка экспорта: ' + (e.message || 'unknown')) }
+// Upload in chunks: keeps each request under the ingress body limit and passes
+// the file modification time as a fallback capture time when the photo has no EXIF,
+// plus the browser time zone for EXIF times written without one
+const UPLOAD_CHUNK = 20
+async function uploadInChunks(path: string, files: File[], fields: Record<string, string>) {
+  const results: any[] = []
+  for (let i = 0; i < files.length; i += UPLOAD_CHUNK) {
+    const formData = new FormData()
+    for (const f of files.slice(i, i + UPLOAD_CHUNK)) {
+      formData.append('files', f)
+      formData.append('capturedAt', new Date(f.lastModified).toISOString())
+    }
+    formData.append('tzOffsetMinutes', String(new Date().getTimezoneOffset()))
+    for (const [k, v] of Object.entries(fields)) formData.append(k, v)
+    const chunk = await api.upload<any[]>(path, formData)
+    results.push(...(Array.isArray(chunk) ? chunk : [chunk]))
+  }
+  return results
+}
+
+function addUploaded(results: any[]) {
+  const known = new Set(studyImages.value.map(i => i.id))
+  studyImages.value.push(...results.filter(r => r.id && !r.error && !known.has(r.id)))
 }
 
 function toggleRun(id: string) {
@@ -187,16 +211,14 @@ async function doUpload() {
   if (!uploadFiles.value.length) return
   uploading.value = true
   try {
-    const formData = new FormData()
-    for (const f of uploadFiles.value) {
-      formData.append('files', f)
-    }
-    formData.append('studyId', studyId.value)
-    formData.append('folderName', uploadFolderName.value)
-    const results = await api.upload<any[]>('/images/upload-batch', formData)
-    uploadResults.value = Array.isArray(results) ? results : [results]
-    studyImages.value.push(...uploadResults.value)
-  } catch {}
+    uploadResults.value = await uploadInChunks('/images/upload-batch', uploadFiles.value, {
+      studyId: studyId.value,
+      folderName: uploadFolderName.value,
+    })
+    addUploaded(uploadResults.value)
+  } catch (e: any) {
+    alert('Ошибка загрузки: ' + (e.message || 'unknown'))
+  }
   uploading.value = false
 }
 
@@ -252,15 +274,15 @@ async function doPlantUpload() {
   if (!plantUploadFiles.value.length || !plantUploadTarget.value) return
   plantUploading.value = true
   try {
-    const formData = new FormData()
-    for (const f of plantUploadFiles.value) formData.append('files', f)
-    formData.append('studyId', studyId.value)
-    formData.append('folderName', plantUploadFolder.value)
-    formData.append('observationUnitId', plantUploadTarget.value.id)
-    const results = await api.upload<any[]>('/images/upload-plant', formData)
-    plantUploadResults.value = Array.isArray(results) ? results : [results]
-    studyImages.value.push(...plantUploadResults.value)
-  } catch {}
+    plantUploadResults.value = await uploadInChunks('/images/upload-plant', plantUploadFiles.value, {
+      studyId: studyId.value,
+      folderName: plantUploadFolder.value,
+      observationUnitId: plantUploadTarget.value.id,
+    })
+    addUploaded(plantUploadResults.value)
+  } catch (e: any) {
+    alert('Ошибка загрузки: ' + (e.message || 'unknown'))
+  }
   plantUploading.value = false
 }
 
@@ -502,6 +524,7 @@ const statusMap: Record<string, string> = {
               class="px-3 py-2 bg-(--color-bg-base) border border-(--color-border-subtle) rounded-lg text-xs">
               <span class="font-mono text-(--color-text-primary)">{{ img.fileName }}</span>
               <span v-if="img.folderName" class="ml-2 text-(--color-text-muted)">{{ img.folderName }}</span>
+              <span v-if="img.capturedAt" class="ml-2 text-(--color-text-muted)" :title="'SHA-256: ' + (img.sha256 || '—')">{{ formatCaptured(img.capturedAt) }}</span>
             </div>
           </div>
           <p v-else class="text-xs text-(--color-text-muted)">Нет привязанных изображений</p>
@@ -516,19 +539,20 @@ const statusMap: Record<string, string> = {
       <div class="flex items-center justify-between">
 
         <div class="flex gap-2">
-          <button @click="downloadCsv" class="px-3 py-2 border border-(--color-border-default) text-(--color-text-secondary) rounded-lg text-xs font-medium hover:bg-(--color-bg-hover) transition-all flex items-center gap-1.5">
+          <button v-for="fmt in (['xlsx', 'pdf', 'csv'] as const)" :key="fmt" @click="downloadExport(fmt)" :disabled="exporting !== null"
+            class="px-3 py-2 border border-(--color-border-default) text-(--color-text-secondary) rounded-lg text-xs font-medium hover:bg-(--color-bg-hover) transition-all flex items-center gap-1.5 disabled:opacity-50">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            CSV
+            {{ exporting === fmt ? '...' : fmt.toUpperCase() }}
           </button>
-          <button @click="downloadZip" class="px-4 py-2 bg-gradient-to-r from-(--color-accent-green) to-(--color-accent-green-dim) text-(--color-text-inverse) rounded-lg text-xs font-semibold hover:opacity-90 transition-all flex items-center gap-1.5">
+          <button @click="downloadExport('zip')" :disabled="exporting !== null" class="px-4 py-2 bg-gradient-to-r from-(--color-accent-green) to-(--color-accent-green-dim) text-(--color-text-inverse) rounded-lg text-xs font-semibold hover:opacity-90 transition-all flex items-center gap-1.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            ZIP (данные + изобр.)
+            {{ exporting === 'zip' ? 'Формирование...' : 'ZIP (данные + изобр.)' }}
           </button>
         </div>
       </div>
       <!-- Sub-tabs -->
       <div class="flex gap-0 border-b border-(--color-border-subtle)">
-        <button v-for="st in [{id:'runs',l:'Анализы'},{id:'table',l:'Таблица'}]" :key="st.id" @click="resultsSubTab = st.id"
+        <button v-for="st in ([{id:'runs',l:'Анализы'},{id:'table',l:'Таблица'},{id:'stats',l:'Статистика'}] as const)" :key="st.id" @click="resultsSubTab = st.id"
           :class="['px-4 py-2.5 text-xs transition-colors relative', resultsSubTab === st.id ? 'text-(--color-accent-green)' : 'text-(--color-text-muted) hover:text-(--color-text-secondary)']">
           {{ st.l }}<span v-if="resultsSubTab === st.id" class="absolute bottom-0 left-0 right-0 h-px bg-(--color-accent-green)"></span>
         </button>
@@ -583,6 +607,8 @@ const statusMap: Record<string, string> = {
       </div>
 
       <!-- Sub: Table (grouped by analysis run) -->
+      <TraitSummaryPanel v-if="resultsSubTab === 'stats'" :study-id="studyId" :refresh-key="analysisRuns.length" />
+
       <div v-if="resultsSubTab === 'table'">
         <div v-if="!analysisRuns.length" class="text-center py-12 bg-(--color-bg-surface) border border-(--color-border-subtle) rounded-xl">
           <p class="text-sm text-(--color-text-muted)">Нет данных</p>
@@ -715,14 +741,19 @@ const statusMap: Record<string, string> = {
               <div v-if="uploadResults.length > 0" class="space-y-2">
                 <div class="flex items-center gap-2 text-(--color-accent-green) mb-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>
-                  <span class="text-sm font-medium">Загружено {{ uploadResults.length }} файлов</span>
+                  <span class="text-sm font-medium">Загружено {{ uploadResults.filter(r => !r.error).length }} из {{ uploadResults.length }} файлов</span>
                 </div>
                 <div class="max-h-48 overflow-y-auto space-y-1">
-                  <div v-for="r in uploadResults" :key="r.id"
-                    class="flex items-center justify-between px-3 py-2 bg-(--color-bg-base) border border-(--color-border-subtle) rounded-lg text-xs">
-                    <span class="font-mono text-(--color-text-primary)">{{ r.fileName }}</span>
-                    <span :class="r.matchedPlantName ? 'text-(--color-accent-green)' : 'text-(--color-text-muted)'">
-                      {{ r.matchedPlantName || 'не привязано' }}
+                  <div v-for="(r, ri) in uploadResults" :key="r.id || 'rejected-' + ri"
+                    class="flex items-center justify-between gap-3 px-3 py-2 bg-(--color-bg-base) border border-(--color-border-subtle) rounded-lg text-xs">
+                    <span class="font-mono text-(--color-text-primary) truncate">{{ r.uploadedName || r.fileName }}</span>
+                    <span v-if="r.error" class="text-(--color-accent-rose) text-right">{{ r.error }}</span>
+                    <span v-else class="flex items-center gap-2 flex-shrink-0">
+                      <span v-if="r.duplicate" class="text-(--color-accent-amber)">{{ r.uploadedName && r.uploadedName !== r.fileName ? 'уже загружен как ' + r.fileName : 'уже загружен' }}</span>
+                      <span class="text-(--color-text-muted)" :title="'Источник времени: ' + r.capturedAtSource">{{ formatCaptured(r.capturedAt) }}</span>
+                      <span :class="r.matchedPlantName ? 'text-(--color-accent-green)' : 'text-(--color-text-muted)'">
+                        {{ r.matchedPlantName || 'не привязано' }}
+                      </span>
                     </span>
                   </div>
                 </div>

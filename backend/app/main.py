@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, programs, trials, studies, germplasm, traits, methods, scales, variables, observation_units, observations, images, dashboard, climate_chambers, sensor_readings, admin
-from app.routers import brapi, brapi_sync, notifications
+from app.routers import brapi, brapi_sync, notifications, export
 
 app = FastAPI(title="PhenoPlant API", version="1.0.0", description="BrAPI v2.1 compatible plant phenotyping platform")
 
@@ -30,6 +30,7 @@ app.include_router(climate_chambers.router, prefix="/api/climate-chambers", tags
 app.include_router(sensor_readings.router, prefix="/api/sensor-readings", tags=["SensorReadings"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(brapi.router, prefix="/brapi/v2", tags=["BrAPI v2.1"])
 app.include_router(brapi_sync.router, prefix="/api/admin", tags=["BrAPI Sync"])
 
