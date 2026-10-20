@@ -16,6 +16,21 @@
    `https://ctfy21.github.io/vkr_pheno_solutions/`.
 3. Свой домен: добавьте файл `site/CNAME` с именем домена и настройте DNS по инструкции GitHub Pages.
 
+## Публикация на своём сервере
+
+Workflow `.github/workflows/site-server.yml` после каждого изменения `site/` в `main` копирует сайт на сервер по SSH (rsync) и отдаёт его через nginx на порту 80. Скрипт `deploy/site-server/setup.sh` перед загрузкой ставит nginx и rsync, если их нет, и один раз добавляет блок сервера PhenoPlant; другие сайты nginx на сервере не трогает.
+
+Один раз настроить:
+
+1. На сервере добавить открытый ключ деплоя в `~/.ssh/authorized_keys` пользователя, под которым идёт загрузка (по умолчанию `root`).
+2. В репозитории: Settings → Secrets and variables → Actions → Secrets → New repository secret:
+   - `SSH_HOST` — адрес сервера;
+   - `SSH_PRIVATE_KEY` — закрытый ключ деплоя целиком, вместе со строками `-----BEGIN…` и `-----END…`.
+3. Необязательно, во вкладке Variables: `SSH_USER` (по умолчанию `root`) и `SITE_DIR` (по умолчанию `/var/www/phenoplant`).
+4. Actions → «Site to server» → Run workflow, чтобы залить сайт сразу, не дожидаясь следующего изменения.
+
+Если сайт не открывается по `http://<адрес сервера>/`, а workflow зелёный, откройте порт 80 в файрволе сервера или у провайдера.
+
 ## Промо-ролик
 
 `media/phenoplant-promo.mp4` (H.264) и `media/phenoplant-promo.webm` (VP9, для браузеров без H.264), 720×720, 21,5 с, постер `media/phenoplant-promo.jpg`.
