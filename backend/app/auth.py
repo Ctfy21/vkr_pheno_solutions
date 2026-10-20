@@ -1,7 +1,7 @@
 import httpx
 from functools import lru_cache
 from typing import Optional, List
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt, jwk
 from jose.utils import base64url_decode
@@ -126,3 +126,23 @@ def require_any_role(*roles: str):
             raise HTTPException(status_code=403, detail="Insufficient role")
         return user
     return _check
+
+
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+# POST endpoints that only read data, so observers may call them
+READ_ONLY_POSTS = {"/api/images/signed-urls"}
+
+
+async def forbid_observer_writes(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+) -> None:
+    """Router dependency: an observer only reads; creating, changing and deleting data needs researcher or admin.
+
+    Requests without a token pass through, so each endpoint still answers them with its own 401/403.
+    """
+    if request.method in SAFE_METHODS or request.url.path in READ_ONLY_POSTS or credentials is None:
+        return
+    user = _user_from_payload(await decode_keycloak_token(credentials.credentials))
+    if not {"admin", "researcher"} & set(user["roles"]):
+        raise HTTPException(status_code=403, detail="Observer role is read-only")
