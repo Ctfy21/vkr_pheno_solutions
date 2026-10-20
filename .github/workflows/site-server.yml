@@ -46,8 +46,20 @@ jobs:
           done
           [ -z "${missing:-}" ] || exit 1
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          # a key pasted on Windows may carry \r line ends, which OpenSSH rejects
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          if ! ssh-keygen -y -P '' -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2>/dev/null; then
+            case "$(head -n 1 ~/.ssh/deploy_key)" in
+              "-----BEGIN "*"PRIVATE KEY-----") kind="the private key header, but the rest of the key is cut off or damaged" ;;
+              ssh-*|ecdsa-*) kind="a public key (the .pub file) instead of the private one" ;;
+              PuTTY-User-Key-File*) kind="a PuTTY .ppk key, which OpenSSH cannot read" ;;
+              *) kind="no private key header on its first line" ;;
+            esac
+            echo "::error::SSH_PRIVATE_KEY cannot be read: it has $kind ($(wc -l < ~/.ssh/deploy_key) lines). Paste the whole private key file, from -----BEGIN OPENSSH PRIVATE KEY----- to -----END OPENSSH PRIVATE KEY-----."
+            exit 1
+          fi
+          echo "Deploy key: $(ssh-keygen -lf ~/.ssh/deploy_key.pub)"
           if [ -n "$SSH_KNOWN_HOSTS" ]; then
             printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           else
@@ -57,7 +69,14 @@ jobs:
             "$SSH_HOST" "$SSH_USER" > ~/.ssh/config
 
       - name: Prepare the server
-        run: ssh site "SITE_DIR='$SITE_DIR' SITE_DOMAIN='$SITE_DOMAIN' CERT_EMAIL='$CERT_EMAIL' bash -s" < deploy/site-server/setup.sh
+        run: |
+          rc=0
+          ssh site "SITE_DIR='$SITE_DIR' SITE_DOMAIN='$SITE_DOMAIN' CERT_EMAIL='$CERT_EMAIL' bash -s" < deploy/site-server/setup.sh || rc=$?
+          if [ "$rc" -eq 255 ]; then
+            # 255 is ssh's own failure; the script's errors come back with their own codes
+            echo "::error::The server did not let the deploy key in as $SSH_USER. Add the public key ($(ssh-keygen -lf ~/.ssh/deploy_key.pub | cut -d' ' -f2)) to ~$SSH_USER/.ssh/authorized_keys on the server."
+          fi
+          exit "$rc"
 
       - name: Upload the site
         run: rsync -rlptz --delete --chmod=D755,F644 --exclude README.md site/ "site:$SITE_DIR/"
