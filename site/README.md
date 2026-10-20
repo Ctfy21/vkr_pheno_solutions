@@ -18,7 +18,13 @@
 
 ## Публикация на своём сервере
 
-Workflow `.github/workflows/site-server.yml` после каждого изменения `site/` в `main` копирует сайт на сервер по SSH (rsync) и отдаёт его через nginx на порту 80. Скрипт `deploy/site-server/setup.sh` перед загрузкой ставит nginx и rsync, если их нет, и один раз добавляет блок сервера PhenoPlant; другие сайты nginx на сервере не трогает.
+Сайт работает на https://phenoplant.ru/. Workflow `.github/workflows/site-server.yml` после каждого изменения `site/` в `main` копирует сайт на сервер по SSH (rsync), а nginx отдаёт его по HTTPS с сертификатом Let's Encrypt. Скрипт `deploy/site-server/setup.sh` перед загрузкой:
+
+- ставит nginx, rsync и certbot, если их нет;
+- получает сертификат для домена и для `www.`, если запись `www` указывает на тот же сервер (сертификат продлевается сам, таймером certbot, и nginx после продления перечитывает его);
+- пишет блок сервера PhenoPlant: порт 80 переадресует на `https://phenoplant.ru`, `www` тоже ведёт на основной адрес; другие сайты nginx на сервере не трогает.
+
+Пока сертификата нет (домен ещё не смотрит на сервер или закрыт порт 80), сайт открывается по `http://` на адресе сервера, а в журнале запуска появляется предупреждение.
 
 Один раз настроить:
 
@@ -26,10 +32,10 @@ Workflow `.github/workflows/site-server.yml` после каждого изме�
 2. В репозитории: Settings → Secrets and variables → Actions → Secrets → New repository secret:
    - `SSH_HOST` — адрес сервера;
    - `SSH_PRIVATE_KEY` — закрытый ключ деплоя целиком, вместе со строками `-----BEGIN…` и `-----END…`.
-3. Необязательно, во вкладке Variables: `SSH_USER` (по умолчанию `root`) и `SITE_DIR` (по умолчанию `/var/www/phenoplant`).
+3. Необязательно, во вкладке Variables: `SITE_DOMAIN` (по умолчанию `phenoplant.ru`), `CERT_EMAIL` (адрес для писем Let's Encrypt о сроке сертификата), `SSH_USER` (по умолчанию `root`), `SITE_DIR` (по умолчанию `/var/www/phenoplant`).
 4. Actions → «Site to server» → Run workflow, чтобы залить сайт сразу, не дожидаясь следующего изменения.
 
-Если сайт не открывается по `http://<адрес сервера>/`, а workflow зелёный, откройте порт 80 в файрволе сервера или у провайдера.
+В файрволе сервера и у провайдера должны быть открыты порты 80 и 443.
 
 ## Промо-ролик
 

@@ -1,8 +1,10 @@
-# Uploads the startup website from site/ to the project's own server over SSH; nginx serves it on port 80.
-# One-time setup in Settings → Secrets and variables → Actions → Secrets:
+# Uploads the startup website from site/ to the project's own server over SSH; nginx serves it
+# at https://SITE_DOMAIN with a Let's Encrypt certificate (plain http on the address while there is none).
+# One-time setup in Settings → Secrets and variables → Actions → Secrets (repository secrets):
 #   SSH_HOST         server address
 #   SSH_PRIVATE_KEY  private deploy key; its public half goes to ~/.ssh/authorized_keys of SSH_USER on the server
-# Optional variables (same page, tab Variables): SSH_USER (default root), SITE_DIR (default /var/www/phenoplant),
+# Optional variables (same page, tab Variables): SITE_DOMAIN (default phenoplant.ru), CERT_EMAIL for
+# Let's Encrypt expiry notices, SSH_USER (default root), SITE_DIR (default /var/www/phenoplant);
 # SSH_KNOWN_HOSTS secret to pin the server's host key instead of reading it with ssh-keyscan.
 name: Site to server
 
@@ -23,9 +25,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ vars.SSH_USER || 'root' }}
       SITE_DIR: ${{ vars.SITE_DIR || '/var/www/phenoplant' }}
+      SITE_DOMAIN: ${{ vars.SITE_DOMAIN || 'phenoplant.ru' }}
+      CERT_EMAIL: ${{ vars.CERT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,10 +38,13 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
-          if [ -z "$SSH_HOST" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "::error::Add the SSH_HOST and SSH_PRIVATE_KEY secrets (Settings → Secrets and variables → Actions)"
-            exit 1
-          fi
+          for name in SSH_HOST SSH_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is empty. Add it under Settings → Secrets and variables → Actions → Repository secrets (not Environment secrets)."
+              missing=1
+            fi
+          done
+          [ -z "${missing:-}" ] || exit 1
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
@@ -50,15 +57,17 @@ jobs:
             "$SSH_HOST" "$SSH_USER" > ~/.ssh/config
 
       - name: Prepare the server
-        run: ssh site "SITE_DIR='$SITE_DIR' bash -s" < deploy/site-server/setup.sh
+        run: ssh site "SITE_DIR='$SITE_DIR' SITE_DOMAIN='$SITE_DOMAIN' CERT_EMAIL='$CERT_EMAIL' bash -s" < deploy/site-server/setup.sh
 
       - name: Upload the site
         run: rsync -rlptz --delete --chmod=D755,F644 --exclude README.md site/ "site:$SITE_DIR/"
 
       - name: Check the site answers
         run: |
-          if curl -fsS --max-time 20 "http://$SSH_HOST/" | grep -q PhenoPlant; then
-            echo "Site is live: http://$SSH_HOST/" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning::Files are on the server, but http://$SSH_HOST/ did not answer from the internet. Open port 80 in the server's firewall."
-          fi
+          for url in ${SITE_DOMAIN:+"https://$SITE_DOMAIN/"} "http://$SSH_HOST/"; do
+            if curl -fsSL --max-time 20 "$url" | grep -q PhenoPlant; then
+              echo "Site is live: $url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
+          echo "::warning::Files are on the server, but the site did not answer from the internet. Open ports 80 and 443 in the server's firewall."
