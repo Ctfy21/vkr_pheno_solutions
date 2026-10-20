@@ -196,7 +196,8 @@ async def run_analysis(
 
     sol_config = solution.get("config", {})
     output_vars = solution.get("outputVariables", [])
-    scale_px_per_cm = sol_config.get("scale_px_per_cm", 10.0)
+    # No fixed scale in the solution: read it from the ruler in each image
+    scale_px_per_cm = sol_config.get("scale_px_per_cm", 0.0)
     algorithm = _pick_algorithm(solution)
 
     run_id = new_id()

@@ -1,7 +1,9 @@
+import cv2
+import numpy as np
 import pytest
 
-from app.analyze import measure_plant_height, plantcv_rgb_analysis
-from tests.helpers import plant_image
+from app.analyze import detect_ruler, measure_plant_height, plantcv_rgb_analysis
+from tests.helpers import plant_image, potted_plant_image, ruler_scene
 
 
 SCALE = 10.0  # px per cm
@@ -31,6 +33,29 @@ class TestAlgorithms:
 
     def test_undecodable_bytes(self):
         assert "error" in measure_plant_height(b"garbage", scale_px_per_cm=SCALE)
+
+    def test_ruler_scale_ignores_blobs_outside_the_ruler(self):
+        img = cv2.imdecode(np.frombuffer(ruler_scene(px_per_cm=11.0), np.uint8), cv2.IMREAD_COLOR)
+        ruler = detect_ruler(img)
+        assert ruler["px_per_cm"] == pytest.approx(11.0, rel=0.02)
+        assert ruler["labels"] == 7
+        assert ruler["left_x"] < 470 + 5
+
+    def test_ruler_scale_survives_a_missing_label(self):
+        img = cv2.imdecode(np.frombuffer(ruler_scene(labels=[10, 20, 40, 50, 60], leaf_blobs=False), np.uint8),
+                           cv2.IMREAD_COLOR)
+        assert detect_ruler(img)["px_per_cm"] == pytest.approx(10.0, rel=0.02)
+
+    def test_height_is_measured_from_the_pot_rim(self):
+        m = plantcv_rgb_analysis(potted_plant_image(plant_h=300, droop=40), scale_px_per_cm=SCALE)
+        assert m["base_source"] == "pot_rim"
+        assert m["height_cm"] == pytest.approx(30.0, abs=0.3)
+        assert m["lowest_green_y"] > m["bottom_y"]
+
+    def test_without_a_pot_height_uses_the_lowest_green_pixel(self):
+        m = plantcv_rgb_analysis(plant_image(height_px=300, width_px=80), scale_px_per_cm=SCALE)
+        assert m["base_source"] == "lowest_green"
+        assert m["bottom_y"] == m["lowest_green_y"]
 
 
 async def seed_experiment(client, headers, db):
