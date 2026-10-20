@@ -17,7 +17,7 @@
   const syncMute = () => {
     muteBtn.setAttribute('aria-pressed', vid.muted ? 'true' : 'false');
     muteBtn.setAttribute('aria-label', vid.muted ? 'Включить звук' : 'Выключить звук');
-    if (muteLabel) muteLabel.textContent = vid.muted ? 'нажмите для звука' : 'звук включён';
+    if (muteLabel) muteLabel.textContent = vid.muted ? 'Звук' : 'Без звука';
   };
   const tryPlay = () => {
     const p = vid.play();

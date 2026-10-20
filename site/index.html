@@ -12,11 +12,11 @@
 <meta property="og:image" content="media/phenoplant-promo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800;900&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<a class="skip-link" href="#main">к содержанию</a>
+<a class="skip-link" href="#main">К содержанию</a>
 
 <header class="hero" id="top">
   <div class="topbar">
@@ -24,21 +24,20 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 21V10"/><path d="M12 13c-4 0-6-3-6-7 4 0 6 3 6 7z"/><path d="M12 10c0-4 2-6 6-6 0 4-2 6-6 6z"/></svg>
       PhenoPlant
     </a>
-    <a class="pill" href="#fund"><span class="pill-tag">ФСИ</span><span class="pill-text">проект поддержан Фондом содействия инновациям</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></a>
     <nav aria-label="Разделы">
-      <a href="#how">как это работает</a>
-      <a href="#features">возможности</a>
-      <a href="#pricing">тарифы</a>
-      <a href="#team">команда</a>
-      <a href="#contacts">контакты</a>
+      <a href="#how">Как это работает</a>
+      <a href="#features">Возможности</a>
+      <a href="#pricing">Тарифы</a>
+      <a href="#team">Команда</a>
+      <a href="#contacts">Контакты</a>
     </nav>
+    <a class="demo" href="#contacts">Запросить демо</a>
   </div>
 
   <div class="hero-main">
     <div class="hero-body">
-      <p class="eyebrow">цифровое фенотипирование растений</p>
-      <h1 class="hero-headline">снял растение.<br>получил <span class="emph">отчёт.</span></h1>
-      <p class="hero-sub">Веб-сервис для селекционеров и лабораторий. Загружаете снимки из климатической камеры или теплицы, а PhenoPlant измеряет <strong>высоту растения и площадь листьев</strong>, сравнивает варианты опыта и выгружает отчёт в PDF и XLSX.</p>
+      <h1 class="hero-headline">Снял растение.<br>Получил <span class="emph">отчёт.</span></h1>
+      <p class="hero-sub">Веб-сервис цифрового фенотипирования для селекционеров и лабораторий. Загружаете снимки из климатической камеры или теплицы, а PhenoPlant измеряет <strong>высоту растения и площадь листьев</strong>, сравнивает варианты опыта и выгружает отчёт в PDF и XLSX.</p>
     </div>
     <figure class="hero-video">
       <video id="hero-vid" poster="media/phenoplant-promo.jpg" muted loop playsinline preload="metadata" aria-describedby="hero-vid-desc">
@@ -54,28 +53,28 @@
         <button id="hero-mute" class="hero-control hero-mute" type="button" aria-label="Включить звук" aria-pressed="true">
           <svg class="icon-muted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3zm13.59 3l2.7-2.7-1.41-1.42L15.17 10.6 12.46 7.88l-1.41 1.41 2.71 2.71-2.71 2.71 1.41 1.41 2.71-2.7 2.71 2.7 1.41-1.41-2.7-2.7z"/></svg>
           <svg class="icon-sound" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3zm10.5 3a4.5 4.5 0 00-2.5-4.03v8.05A4.5 4.5 0 0013.5 12zm-2.5-9v2.06A7 7 0 0117 12a7 7 0 01-6 6.92V21A9 9 0 0019 12 9 9 0 0011 3z"/></svg>
-          <span class="hero-mute-label">нажмите для звука</span>
+          <span class="hero-mute-label">Звук</span>
         </button>
       </div>
     </figure>
   </div>
 
   <div class="hero-foot">
-    <div class="readout-stack">
-      <span class="eyebrow readout-label">реальный замер · соя, съёмка 12.10.2026</span>
-<pre class="readout" aria-label="Результат анализа одного снимка"><code><span class="k">снимок</span> <span class="v">4_O2_4.jpg · SHA-256</span> <span class="ok">✓</span>
-<span class="k">маска</span> <span class="v">площадь листьев 1161 см²</span>
-<span class="k">масштаб</span> <span class="v">12,21 пкс/см по 8 меткам линейки</span>
-<span class="k">высота</span> <span class="v">64,2 см от края горшка</span>
-<span class="k">отчёт</span> <span class="v">PDF · XLSX · CSV · BrAPI JSON</span></code></pre>
-    </div>
+    <section class="readout" aria-labelledby="readout-title">
+      <h2 id="readout-title">Реальный замер: соя, снимок 4_O2_4 от 12.10.2026</h2>
+      <dl>
+        <dt>Целостность</dt><dd>контрольная сумма SHA-256 совпала <span class="ok">✓</span></dd>
+        <dt>Масштаб</dt><dd>12,21 пкс/см по 8 меткам линейки</dd>
+        <dt>Высота</dt><dd>64,2 см от края горшка</dd>
+        <dt>Площадь листьев</dt><dd>1161 см²</dd>
+        <dt>Выгрузка</dt><dd>PDF, XLSX, CSV, BrAPI JSON</dd>
+      </dl>
+    </section>
     <aside class="cta-card" aria-labelledby="cta-title">
-      <h2 class="cta-title" id="cta-title">покажем на<br><em>ваших снимках.</em></h2>
-      <p class="cta-copy">Пришлите несколько фотографий растений с линейкой в кадре, и мы вернём измерения и отчёт по вашему опыту.</p>
-      <a class="cta-go" href="#contacts"><span>запросить демонстрацию</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      <ul class="cta-facts"><li>без установки</li><li>PDF и XLSX</li><li>BrAPI v2.1</li></ul>
+      <h2 class="cta-title" id="cta-title">Покажем на ваших снимках</h2>
+      <p class="cta-copy">Пришлите несколько фотографий растений с линейкой в кадре, и мы вернём измерения и отчёт по вашему опыту. Устанавливать ничего не нужно.</p>
+      <a class="cta-go" href="#contacts"><span>Запросить демонстрацию</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </aside>
-    <p class="hero-meta"><span class="dot" aria-hidden="true"></span>ошибка измерения высоты MAE 1,60 см · признаки CropOntology · обмен по BrAPI v2.1</p>
   </div>
 </header>
 
@@ -89,17 +88,17 @@
     </div>
   </div>
 
-  <section class="section problem" id="problem" aria-labelledby="problem-title">
+  <section class="section" id="problem" aria-labelledby="problem-title">
     <div class="inner problem-grid">
       <div class="section-head" style="margin-bottom:0">
-        <p class="eyebrow" style="color:var(--tint-accent)">задача</p>
-        <h2 class="title" id="problem-title">1000+ растений<br><span class="emph">в одной камере.</span></h2>
-        <p class="lead">За опыт в камере ускоренной селекции выращивают больше тысячи растений. Высоту меряют линейкой, данные пишут в журналы и разрозненные таблицы, и связь замера с условиями выращивания теряется.</p>
+        <p class="big-number" aria-hidden="true">1000+</p>
+        <h2 class="title" id="problem-title">Растений в одной камере, и все их меряют линейкой</h2>
+        <p class="lead">За опыт в камере ускоренной селекции выращивают больше тысячи растений. Данные пишут в журналы и разрозненные таблицы, и связь замера с условиями выращивания теряется.</p>
       </div>
       <ul class="problem-list">
-        <li><span>01</span>ошибки переписывания и потерянный контекст опыта</li>
-        <li><span>02</span>нельзя проверить, каким снимком подтверждён результат</li>
-        <li><span>03</span>статистику и отчёт по каждому опыту собирают вручную</li>
+        <li>Ошибки переписывания и потерянный контекст опыта.</li>
+        <li>Нельзя проверить, каким снимком подтверждён результат.</li>
+        <li>Статистику и отчёт по каждому опыту собирают вручную.</li>
       </ul>
     </div>
   </section>
@@ -107,14 +106,13 @@
   <section class="section dark" id="how" aria-labelledby="how-title">
     <div class="inner">
       <div class="section-head">
-        <p class="eyebrow">как это работает</p>
-        <h2 class="title" id="how-title">от съёмки до отчёта<br><em>в одном сервисе.</em></h2>
+        <h2 class="title" id="how-title">От съёмки до отчёта <em>в одном сервисе</em></h2>
       </div>
       <ol class="steps">
-        <li class="step"><span class="n">01</span><h3>съёмка</h3><p>Камеры в климатической камере или обычный смартфон. В кадре растение и мерная линейка.</p></li>
-        <li class="step"><span class="n">02</span><h3>загрузка</h3><p>Время съёмки берётся из EXIF или даты файла, для каждого файла считается SHA-256, снимок привязывается к растению по имени.</p></li>
-        <li class="step"><span class="n">03</span><h3>анализ</h3><p>Исследователь выбирает метод фенотипирования. Алгоритм выделяет растение, берёт масштаб по линейке и измеряет признаки в сантиметрах.</p></li>
-        <li class="step"><span class="n">04</span><h3>статистика и отчёт</h3><p>Сравнение вариантов опыта, динамика по датам, скорость роста. Выгрузка в PDF, XLSX, CSV и BrAPI JSON.</p></li>
+        <li class="step"><h3>Съёмка</h3><p>Камеры в климатической камере или обычный смартфон. В кадре растение и мерная линейка.</p></li>
+        <li class="step"><h3>Загрузка</h3><p>Время съёмки берётся из EXIF или даты файла, для каждого файла считается SHA-256, снимок привязывается к растению по имени.</p></li>
+        <li class="step"><h3>Анализ</h3><p>Исследователь выбирает метод фенотипирования. Алгоритм выделяет растение, берёт масштаб по линейке и измеряет признаки в сантиметрах.</p></li>
+        <li class="step"><h3>Статистика и отчёт</h3><p>Сравнение вариантов опыта, динамика по датам, скорость роста. Выгрузка в PDF, XLSX, CSV и BrAPI JSON.</p></li>
       </ol>
       <figure class="pipeline">
         <img src="img/pipeline.webp" width="2000" height="595" loading="lazy" alt="Пять кадров обработки снимка сои 4_O2_4: исходный снимок, маска растения, метки линейки, верх растения и край горшка, итог с высотой 64,2 см">
@@ -127,22 +125,21 @@
     <div class="inner traits-grid">
       <div>
         <div class="section-head" style="margin-bottom:0">
-          <p class="eyebrow" style="color:var(--tint-accent)">два признака</p>
-          <h2 class="title" id="traits-title">высота и<br><span class="emph">площадь листьев.</span></h2>
+          <h2 class="title" id="traits-title">Высота растения и площадь листьев</h2>
           <p class="lead">По каждому признаку сервис считает среднее, стандартное отклонение, коэффициент вариации и 95 % доверительный интервал по вариантам опыта, а различие с контролем проверяет t-критерием Уэлча.</p>
         </div>
         <div class="trait-list">
-          <div class="trait"><span class="co">CO_321:0000020 · см</span><h3>высота растения</h3><p>От края горшка до верхней точки растения, масштаб по меткам линейки на каждом снимке.</p></div>
-          <div class="trait"><span class="co">CO_321:0000080 · см²</span><h3>площадь проекции листьев</h3><p>Площадь зелёной массы на снимке после сегментации в цветовом пространстве HSV.</p></div>
+          <div class="trait"><h3>Высота растения, см</h3><p>От края горшка до верхней точки растения, масштаб по меткам линейки на каждом снимке. Переменная CropOntology <span class="co">CO_321:0000020</span>.</p></div>
+          <div class="trait"><h3>Площадь проекции листьев, см²</h3><p>Площадь зелёной массы на снимке после сегментации в цветовом пространстве HSV. Переменная CropOntology <span class="co">CO_321:0000080</span>.</p></div>
         </div>
       </div>
       <figure class="shot">
         <img src="img/statistics.webp" width="1600" height="710" loading="lazy" alt="Вкладка «Статистика» опыта с соей: таблица высоты по вариантам 3 и 4, сравнение с контролем по t-критерию Уэлча и график средней высоты по дате съёмки">
         <figcaption class="caption">Вкладка «Статистика» на реальном опыте с соей: пять растений, варианты 3 и 4, съёмка 12.10.2026.</figcaption>
         <div class="result-row" aria-label="Средняя высота по вариантам">
-          <div><b>55,0 см</b><span>вариант 3 · 3 растения</span></div>
-          <div><b>64,4 см</b><span>вариант 4 · 2 растения</span></div>
-          <div><b>p = 0,48</b><span>t-критерий Уэлча</span></div>
+          <div><b>55,0 см</b><span>вариант 3, три растения</span></div>
+          <div><b>64,4 см</b><span>вариант 4, два растения</span></div>
+          <div><b>p = 0,48</b><span>различие не значимо</span></div>
         </div>
       </figure>
     </div>
@@ -151,38 +148,37 @@
   <section class="section dark" id="features" aria-labelledby="features-title">
     <div class="inner">
       <div class="section-head">
-        <p class="eyebrow">возможности</p>
-        <h2 class="title" id="features-title">что входит<br><em>в платформу.</em></h2>
+        <h2 class="title" id="features-title">Что входит <em>в платформу</em></h2>
       </div>
       <div class="features">
-        <div class="feature"><h3>снимки с привязкой ко времени</h3><p>Время съёмки из EXIF с часовым поясом, иначе из даты файла. Пакетная загрузка, отчёт по каждому файлу, повторные файлы не сохраняются дважды.</p></div>
-        <div class="feature"><h3>безопасное хранение</h3><p>Контрольная сумма SHA-256 сверяется при каждом чтении и перед анализом. Файлы выдаются по временным подписанным ссылкам, действия пишутся в журнал.</p></div>
-        <div class="feature"><h3>методы фенотипирования</h3><p>Алгоритмы подключаются как отдельные решения в контейнерах. Исследователь выбирает метод при запуске анализа и видит, какие признаки он измеряет.</p></div>
-        <div class="feature"><h3>статистика опыта</h3><p>Описательная статистика, сравнение с контролем, динамика по датам съёмки, абсолютная и относительная скорость роста каждого растения.</p></div>
-        <div class="feature"><h3>отчёты PDF и XLSX</h3><p>PDF с таблицами, графиками и аннотированными снимками. Книга Excel с листами результатов, статистики и динамики. Архив с манифестом контрольных сумм.</p></div>
-        <div class="feature"><h3>камеры и стандарты</h3><p>Снимок связывается с показаниями датчиков камеры в момент съёмки. Данные описаны переменными CropOntology и выгружаются по BrAPI v2.1.</p></div>
+        <div class="feature"><h3>Снимки с привязкой ко времени</h3><p>Время съёмки из EXIF с часовым поясом, иначе из даты файла. Пакетная загрузка, отчёт по каждому файлу, повторные файлы не сохраняются дважды.</p></div>
+        <div class="feature"><h3>Безопасное хранение</h3><p>Контрольная сумма SHA-256 сверяется при каждом чтении и перед анализом. Файлы выдаются по временным подписанным ссылкам, действия пишутся в журнал.</p></div>
+        <div class="feature"><h3>Методы фенотипирования</h3><p>Алгоритмы подключаются как отдельные решения в контейнерах. Исследователь выбирает метод при запуске анализа и видит, какие признаки он измеряет.</p></div>
+        <div class="feature"><h3>Статистика опыта</h3><p>Описательная статистика, сравнение с контролем, динамика по датам съёмки, абсолютная и относительная скорость роста каждого растения.</p></div>
+        <div class="feature"><h3>Отчёты PDF и XLSX</h3><p>PDF с таблицами, графиками и аннотированными снимками. Книга Excel с листами результатов, статистики и динамики. Архив с манифестом контрольных сумм.</p></div>
+        <div class="feature"><h3>Камеры и стандарты</h3><p>Снимок связывается с показаниями датчиков камеры в момент съёмки. Данные описаны переменными CropOntology и выгружаются по BrAPI v2.1.</p></div>
       </div>
 
       <div class="grid">
         <figure class="card">
           <div class="card-media"><img src="img/upload.webp" width="1015" height="830" loading="lazy" alt="Окно загрузки: время съёмки и растение для каждого файла, отмеченный дубликат и отклонённый файл неподдерживаемого формата"></div>
-          <figcaption class="card-cap"><span class="num">01</span><span class="name">загрузка снимков</span><span class="desc">Время съёмки и растение для каждого файла; дубликат и файл неподходящего формата видны сразу.</span></figcaption>
+          <figcaption><b>Загрузка снимков</b><span>Время съёмки и растение для каждого файла; дубликат и файл неподходящего формата видны сразу.</span></figcaption>
         </figure>
         <figure class="card">
           <div class="card-media"><img src="img/run.webp" width="772" height="665" loading="lazy" alt="Окно запуска фенотипирования: выбор решения PlantCV RGB или Plant Height Measurement и список измеряемых признаков"></div>
-          <figcaption class="card-cap"><span class="num">02</span><span class="name">выбор метода</span><span class="desc">Решение для анализа выбирается при запуске; у каждого указаны измеряемые признаки.</span></figcaption>
+          <figcaption><b>Выбор метода</b><span>Решение для анализа выбирается при запуске; у каждого указаны измеряемые признаки.</span></figcaption>
         </figure>
         <figure class="card">
           <div class="card-media"><img src="img/measure.webp" width="1400" height="1109" loading="lazy" alt="Аннотированный снимок сои 3_O2_2 с отметками верха и основания, высотой 76,5 см и панелью измерений"></div>
-          <figcaption class="card-cap"><span class="num">03</span><span class="name">измерения по снимку</span><span class="desc">Разметка растения и все признаки снимка: высота, площадь, масштаб, ширина куста.</span></figcaption>
+          <figcaption><b>Измерения по снимку</b><span>Разметка растения и все признаки снимка: высота, площадь, масштаб, ширина куста.</span></figcaption>
         </figure>
         <figure class="card half">
           <div class="card-media"><img src="img/export.webp" width="1600" height="715" loading="lazy" alt="Страница экспорта данных: форматы Excel, PDF-отчёт, CSV и BrAPI JSON, выбор эксперимента и сводка экспорта"></div>
-          <figcaption class="card-cap"><span class="num">04</span><span class="name">экспорт</span><span class="desc">XLSX, PDF, CSV или BrAPI JSON по выбранному опыту и периоду.</span></figcaption>
+          <figcaption><b>Экспорт</b><span>XLSX, PDF, CSV или BrAPI JSON по выбранному опыту и периоду.</span></figcaption>
         </figure>
         <figure class="card half">
           <div class="card-media"><img src="img/report-pdf.webp" width="1800" height="829" loading="lazy" alt="Три страницы PDF-отчёта по опыту с соей: сводка и таблицы статистики, графики по вариантам, аннотированные снимки"></div>
-          <figcaption class="card-cap"><span class="num">05</span><span class="name">отчёт PDF</span><span class="desc">Сводка, таблицы статистики, графики и аннотированные снимки опыта с соей в одном файле.</span></figcaption>
+          <figcaption><b>Отчёт PDF</b><span>Сводка, таблицы статистики, графики и аннотированные снимки опыта с соей в одном файле.</span></figcaption>
         </figure>
       </div>
     </div>
@@ -191,14 +187,13 @@
   <section class="section" id="audience" aria-labelledby="audience-title">
     <div class="inner">
       <div class="section-head">
-        <p class="eyebrow" style="color:var(--tint-accent)">для кого</p>
-        <h2 class="title" id="audience-title">кому нужен<br><span class="emph">PhenoPlant.</span></h2>
+        <h2 class="title" id="audience-title">Кому нужен PhenoPlant</h2>
         <p class="lead">Мировой рынок цифрового сельского хозяйства оценивался в 22 млрд долларов в 2023 году и, по прогнозу, вырастет до 43 млрд к 2030 году. Сегмент фенотипирования растений занимает около 3,5 млрд долларов.</p>
       </div>
       <div class="segs">
-        <div class="seg"><span class="share">45 %</span><h3>агрокомпании и селекционные центры</h3><p>Ускорение отбора устойчивых сортов, оптимизация условий выращивания в теплицах и вертикальных фермах.</p><div class="bar" aria-hidden="true"><i style="width:45%"></i></div></div>
+        <div class="seg"><span class="share">45 %</span><h3>Агрокомпании и селекционные центры</h3><p>Ускорение отбора устойчивых сортов, оптимизация условий выращивания в теплицах и вертикальных фермах.</p><div class="bar" aria-hidden="true"><i style="width:45%"></i></div></div>
         <div class="seg"><span class="share">35 %</span><h3>НИИ и университеты</h3><p>Воспроизводимые эксперименты в агробиологии, генетике и селекции растений; обучение студентов.</p><div class="bar" aria-hidden="true"><i style="width:35%"></i></div></div>
-        <div class="seg"><span class="share">20 %</span><h3>производители климатических камер</h3><p>Программная часть для камер: фенотипирование «из коробки» по лицензии.</p><div class="bar" aria-hidden="true"><i style="width:20%"></i></div></div>
+        <div class="seg"><span class="share">20 %</span><h3>Производители климатических камер</h3><p>Программная часть для камер: фенотипирование «из коробки» по лицензии.</p><div class="bar" aria-hidden="true"><i style="width:20%"></i></div></div>
       </div>
     </div>
   </section>
@@ -206,22 +201,21 @@
   <section class="section green" id="pricing" aria-labelledby="pricing-title">
     <div class="inner">
       <div class="section-head">
-        <p class="eyebrow">тарифы</p>
-        <h2 class="title" id="pricing-title">в облаке или<br><span class="emph">у заказчика.</span></h2>
+        <h2 class="title" id="pricing-title">Тарифы: в облаке или у заказчика</h2>
       </div>
       <div class="plans">
         <div class="plan">
-          <span class="eyebrow">лаборатория</span>
+          <h3>Лаборатория</h3>
           <div class="price">от 50 000 ₽<small>в месяц</small></div>
           <ul><li>доступ к веб-сервису в облаке</li><li>загрузка снимков и анализ двух признаков</li><li>отчёты PDF и XLSX</li></ul>
         </div>
         <div class="plan featured">
-          <span class="eyebrow">core</span>
+          <h3>Core</h3>
           <div class="price">219 000 ₽<small>в месяц</small></div>
           <ul><li>до 6 камер и 5 пользователей</li><li>интеграция с климатическими камерами</li><li>сопровождение и обновления</li></ul>
         </div>
         <div class="plan">
-          <span class="eyebrow">on-premise</span>
+          <h3>On-premise</h3>
           <div class="price">от 3,9 млн ₽<small>лицензия и внедрение</small></div>
           <ul><li>установка в контуре организации</li><li>поддержка и обновления: 18 % стоимости лицензии в год</li><li>скидка 10–15 % при подключении более 6 камер</li></ul>
         </div>
@@ -237,20 +231,19 @@
   <section class="section" id="team" aria-labelledby="team-title">
     <div class="inner team-grid">
       <div class="section-head" style="margin-bottom:0">
-        <p class="eyebrow" style="color:var(--tint-accent)">команда</p>
-        <h2 class="title" id="team-title">кто делает<br><span class="emph">проект.</span></h2>
+        <h2 class="title" id="team-title">Команда</h2>
         <div class="person">
           <span class="avatar" aria-hidden="true">СК</span>
           <div><h3>Сергей Килеев</h3><p>Руководитель проекта. Архитектура платформы, серверная и клиентская части, алгоритмы измерения по снимкам.</p></div>
         </div>
       </div>
       <div class="hiring">
-        <p class="eyebrow" style="color:var(--tint-accent)">расширяем команду</p>
+        <h3>Расширяем команду</h3>
         <ul>
           <li>Data Scientist для моделей компьютерного зрения</li>
           <li>Full-stack разработчик</li>
-          <li>агроном-консультант для валидации данных</li>
-          <li>специалист по продажам</li>
+          <li>Агроном-консультант для валидации данных</li>
+          <li>Специалист по продажам</li>
         </ul>
       </div>
     </div>
@@ -258,14 +251,14 @@
 
   <section class="outro" id="contacts" aria-labelledby="contacts-title">
     <div class="inner">
-      <h2 class="outro-headline" id="contacts-title">покажем на<br><span class="emph">ваших снимках.</span></h2>
+      <h2 class="outro-headline" id="contacts-title">Покажем на <span class="emph">ваших снимках.</span></h2>
       <div class="outro-grid">
         <p class="lead">Пришлите несколько фотографий растений с линейкой в кадре, и мы покажем измерения, статистику и отчёт по вашему опыту.</p>
         <dl class="contacts">
-          <dt>e-mail</dt><dd><span class="todo">[укажите e-mail проекта]</span></dd>
-          <dt>телефон</dt><dd><span class="todo">[укажите телефон]</span></dd>
-          <dt>telegram</dt><dd><span class="todo">[укажите контакт]</span></dd>
-          <dt>компания</dt><dd>ООО «БИОИНФОСИСТЕМЫ», ИНН 7751380045</dd>
+          <dt>E-mail</dt><dd><span class="todo">[укажите e-mail проекта]</span></dd>
+          <dt>Телефон</dt><dd><span class="todo">[укажите телефон]</span></dd>
+          <dt>Telegram</dt><dd><span class="todo">[укажите контакт]</span></dd>
+          <dt>Компания</dt><dd>ООО «БИОИНФОСИСТЕМЫ», ИНН 7751380045</dd>
         </dl>
       </div>
       <footer class="foot">
@@ -275,7 +268,7 @@
         </div>
         <div class="colophon">
           <span>© 2026 PhenoPlant. Платформа цифрового фенотипирования растений и оцифровки экспериментов для учёных-селекционеров.</span>
-          <span>оформление по мотивам <a href="https://github.com/latent-spaces/brag">brag</a> (MIT)</span>
+          <span>Композиция страницы по мотивам <a href="https://github.com/latent-spaces/brag">brag</a> (MIT)</span>
         </div>
       </footer>
     </div>
